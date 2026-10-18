@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Part C - Add Employee Data-Driven Validation Suite" verbose="1">
+
+    <listeners>
+        <listener class-name="com.uplift.reporting.ExtentTestListener"/>
+    </listeners>
+
+    <test name="Add Employee Form Negative & Boundary Validations">
+        <classes>
+            <class name="com.uplift.tests.ui.EmployeeValidationTest"/>
+        </classes>
+    </test>
+
+</suite>

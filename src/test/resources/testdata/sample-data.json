@@ -1,0 +1,11 @@
+{
+  "smokeUser": {
+    "username": "test_qa_user",
+    "role": "QA_ENGINEER",
+    "environment": "QA"
+  },
+  "smokeEndpoint": {
+    "path": "/users?page=1",
+    "expectedStatusCode": 200
+  }
+}

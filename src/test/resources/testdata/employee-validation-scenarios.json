@@ -1,0 +1,64 @@
+{
+  "invalidEmails": [
+    {
+      "value": "invalid-email-missing-at-domain",
+      "scenario": "Missing @ and domain"
+    },
+    {
+      "value": "qa.user@",
+      "scenario": "Missing domain after @"
+    },
+    {
+      "value": "@example.com",
+      "scenario": "Missing username before @"
+    },
+    {
+      "value": "qa..user@example.com",
+      "scenario": "Double dot in local part"
+    }
+  ],
+  "invalidPpsns": [
+    {
+      "value": "12345",
+      "scenario": "Too short (less than 7 digits)"
+    },
+    {
+      "value": "123456789",
+      "scenario": "Missing trailing check character (digits only)"
+    },
+    {
+      "value": "ABC1234T",
+      "scenario": "Alphabetic characters in numeric prefix"
+    },
+    {
+      "value": "1234567-T",
+      "scenario": "Disallowed special characters/hyphens"
+    }
+  ],
+  "invalidMobiles": [
+    {
+      "value": "12345",
+      "scenario": "Too short for Irish mobile"
+    },
+    {
+      "value": "+35387ABCDEF",
+      "scenario": "Alphabetic characters in mobile number"
+    },
+    {
+      "value": "9999999999",
+      "scenario": "Invalid Irish network prefix (expected 08x or +3538x)"
+    }
+  ],
+  "under18Dobs": [
+    {
+      "value": "2012-05-15",
+      "age": 14,
+      "scenario": "14-year-old minor"
+    },
+    {
+      "value": "2009-10-01",
+      "age": 17,
+      "scenario": "17-year-old minor below 18-year statutory minimum"
+    }
+  ]
+}

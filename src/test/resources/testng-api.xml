@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Part D - Employee REST Assured API Suite" verbose="1">
+
+    <listeners>
+        <listener class-name="com.uplift.reporting.ExtentTestListener"/>
+    </listeners>
+
+    <test name="REST Assured Authentication and Employee Endpoint Tests">
+        <classes>
+            <class name="com.uplift.tests.api.EmployeeApiTest"/>
+        </classes>
+    </test>
+
+</suite>

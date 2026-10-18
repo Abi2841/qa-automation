@@ -1,0 +1,39 @@
+# Maven build output
+target/
+*.class
+
+# TestNG output & logs
+test-output/
+*.log
+
+# ExtentReports & HTML Test Reports
+reports/
+extent-reports/
+ExtentReport.html
+*.html
+
+# Screenshots & Visual Artifacts
+screenshots/
+test-recordings/
+
+# Secrets & Local Configurations (DO NOT COMMIT)
+secrets.properties
+.env
+local.properties
+*.key
+*.pem
+
+# IDE & Editor files
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+.nb-gradle/
+*.suo
+*.user
+
+# OS generated files
+.DS_Store
+Thumbs.db
