@@ -6,7 +6,7 @@
         <listener class-name="com.uplift.reporting.ExtentTestListener"/>
     </listeners>
 
-    <test name="Add Employee Form Negative & Boundary Validations">
+    <test name="Add Employee Form Negative &amp; Boundary Validations">
         <classes>
             <class name="com.uplift.tests.ui.EmployeeValidationTest"/>
         </classes>

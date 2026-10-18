@@ -11,32 +11,40 @@ import java.util.List;
 
 /**
  * Page Object representing the Manual Employee Onboarding form.
- * Supports standard fields plus Irish regulatory fields: PPSN, Mobile, Date of Birth,
+ * Supports standard fields plus Irish regulatory fields: PPSN, Mobile, Date of
+ * Birth,
  * and comprehensive validation error inspection.
  */
 public class AddEmployeePage extends BasePage {
 
     // Core Form Locators
-    private final By employeeIdInput = By.cssSelector("input#employeeId, input[name='employeeId'], input[name='staffId']");
+    private final By employeeIdInput = By
+            .cssSelector("input#employeeId, input[name='employeeId'], input[name='staffId']");
     private final By firstNameInput = By.cssSelector("input#firstName, input[name='firstName']");
     private final By lastNameInput = By.cssSelector("input#lastName, input[name='lastName']");
     private final By emailInput = By.cssSelector("input#email, input[name='email'], input[type='email']");
     private final By departmentInput = By.cssSelector("input#department, select#department, input[name='department']");
-    private final By dateOfJoiningInput = By.cssSelector("input#dateOfJoining, input[name='dateOfJoining'], input[type='date']");
+    private final By dateOfJoiningInput = By
+            .cssSelector("input#dateOfJoining, input[name='dateOfJoining'], input[type='date']");
     private final By salaryInput = By.cssSelector("input#salary, input[name='salary']");
 
     // Irish Regulatory & Contact Locators
     private final By ppsnInput = By.cssSelector("input#ppsn, input[name='ppsn'], input[data-testid='ppsn-input']");
-    private final By mobileInput = By.cssSelector("input#mobile, input#phone, input[name='mobile'], input[name='mobileNumber']");
-    private final By dobInput = By.cssSelector("input#dob, input[name='dob'], input[name='dateOfBirth'], input[type='date']#dob");
+    private final By mobileInput = By
+            .cssSelector("input#mobile, input#phone, input[name='mobile'], input[name='mobileNumber']");
+    private final By dobInput = By
+            .cssSelector("input#dob, input[name='dob'], input[name='dateOfBirth'], input[type='date']#dob");
 
     // Action Buttons
-    private final By saveButton = By.cssSelector("button[type='submit'], button#save-employee, [data-testid='btn-save-employee'], .btn-primary");
+    private final By saveButton = By.cssSelector(
+            "button[type='submit'], button#save-employee, [data-testid='btn-save-employee'], .btn-primary");
     private final By cancelButton = By.cssSelector("button#cancel, .btn-cancel, .btn-secondary");
 
     // Validation Feedback & Error Locators
-    private final By generalErrorBanner = By.cssSelector(".alert-danger, .error-summary, [role='alert'], .toast-error, .banner-error");
-    private final By inlineFieldErrors = By.cssSelector(".invalid-feedback, .error-message, .field-error, span[id*='error'], .text-danger");
+    private final By generalErrorBanner = By
+            .cssSelector(".alert-danger, .error-summary, [role='alert'], .toast-error, .banner-error");
+    private final By inlineFieldErrors = By
+            .cssSelector(".invalid-feedback, .error-message, .field-error, span[id*='error'], .text-danger");
     private final By emailError = By.cssSelector("#email-error, [data-testid='error-email'], .email-error");
     private final By ppsnError = By.cssSelector("#ppsn-error, [data-testid='error-ppsn'], .ppsn-error");
     private final By mobileError = By.cssSelector("#mobile-error, [data-testid='error-mobile'], .mobile-error");
@@ -100,19 +108,30 @@ public class AddEmployeePage extends BasePage {
     }
 
     /**
-     * Complete workflow to populate all employee fields (including PPSN, Mobile, DOB).
+     * Complete workflow to populate all employee fields (including PPSN, Mobile,
+     * DOB).
      */
     public void fillEmployeeForm(EmployeeModel employee) {
-        if (employee.getEmployeeId() != null) enterEmployeeId(employee.getEmployeeId());
-        if (employee.getFirstName() != null) enterFirstName(employee.getFirstName());
-        if (employee.getLastName() != null) enterLastName(employee.getLastName());
-        if (employee.getEmail() != null) enterEmail(employee.getEmail());
-        if (employee.getPpsn() != null) enterPpsn(employee.getPpsn());
-        if (employee.getMobileNumber() != null) enterMobile(employee.getMobileNumber());
-        if (employee.getDateOfBirth() != null) enterDateOfBirth(employee.getDateOfBirth());
-        if (employee.getDepartment() != null) enterDepartment(employee.getDepartment());
-        if (employee.getDateOfJoining() != null) enterDateOfJoining(employee.getDateOfJoining());
-        if (employee.getSalary() != null) enterSalary(employee.getSalary());
+        if (employee.getEmployeeId() != null)
+            enterEmployeeId(employee.getEmployeeId());
+        if (employee.getFirstName() != null)
+            enterFirstName(employee.getFirstName());
+        if (employee.getLastName() != null)
+            enterLastName(employee.getLastName());
+        if (employee.getEmail() != null)
+            enterEmail(employee.getEmail());
+        if (employee.getPpsn() != null)
+            enterPpsn(employee.getPpsn());
+        if (employee.getMobileNumber() != null)
+            enterMobile(employee.getMobileNumber());
+        if (employee.getDateOfBirth() != null)
+            enterDateOfBirth(employee.getDateOfBirth());
+        if (employee.getDepartment() != null)
+            enterDepartment(employee.getDepartment());
+        if (employee.getDateOfJoining() != null)
+            enterDateOfJoining(employee.getDateOfJoining());
+        if (employee.getSalary() != null)
+            enterSalary(employee.getSalary());
     }
 
     /**
@@ -180,12 +199,15 @@ public class AddEmployeePage extends BasePage {
     }
 
     /**
-     * Checks if any validation failure is visible (banner, inline error, or HTML5 invalid pseudo-class).
+     * Checks if any validation failure is visible (banner, inline error, or HTML5
+     * invalid pseudo-class).
      */
     public boolean hasValidationErrors() {
-        if (isGeneralErrorDisplayed()) return true;
+        if (isGeneralErrorDisplayed())
+            return true;
         List<String> inline = getAllInlineErrorMessages();
-        if (!inline.isEmpty()) return true;
+        if (!inline.isEmpty())
+            return true;
 
         // Check HTML5 :invalid state on inputs
         List<WebElement> invalidInputs = driver.findElements(By.cssSelector("input:invalid, select:invalid"));
