@@ -111,7 +111,15 @@ def runMaven(String goals) {
     if (isUnix()) {
         sh cmd
     } else {
-        bat cmd
+        // A wrong JAVA_HOME (e.g. one ending in \bin, or a folder that no longer exists) makes Maven refuse to start.
+        // If it is invalid, ignore it so Maven uses the java found on PATH.
+        bat """
+            if defined JAVA_HOME if not exist "%JAVA_HOME%\\bin\\java.exe" (
+              echo [WARN] JAVA_HOME "%JAVA_HOME%" is invalid, using java from PATH instead
+              set "JAVA_HOME="
+            )
+            ${cmd}
+        """
     }
 }
 
