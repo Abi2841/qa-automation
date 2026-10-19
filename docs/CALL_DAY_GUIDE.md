@@ -42,7 +42,7 @@ If the **response schema** differs, edit `src/test/resources/schemas/employee-re
 ## D. Run in this order
 
 ```powershell
-# 1. Are all values set, and do they work? (about 10 seconds)
+# 1. Are all values set, and do they work? (values, URLs, browser, API login, inbox)
 mvn test "-DsuiteXmlFile=src/test/resources/testng-preflight.xml"
 
 # 2. Admin part only, browser visible, so you can watch and fix locators
@@ -58,7 +58,7 @@ mvn test "-DsuiteXmlFile=src/test/resources/testng-api.xml"
 mvn clean test
 ```
 
-Part C and the API cross-check use the employer admin created by the journey in the **same run**. To run them alone, set `employer.admin.email` and `employer.admin.password` in `secrets.properties`.
+Part C and the API cross-check use the employer admin created by the journey in the **same run**. To run Part C alone (`mvn test "-Dtest=EmployeeValidationTest"`), set `employer.admin.email` and `employer.admin.password` in `secrets.properties`.
 
 ## E. When a step fails: fix the locator
 

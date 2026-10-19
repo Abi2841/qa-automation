@@ -34,19 +34,4 @@ public final class TestDataManager {
             return null;
         }
     }
-
-    /**
-     * Maps a JSON resource directly to a typed Java class.
-     */
-    public static <T> T getDataAs(String resourcePath, Class<T> clazz) {
-        try (InputStream is = TestDataManager.class.getClassLoader().getResourceAsStream(resourcePath)) {
-            if (is == null) {
-                return null;
-            }
-            return objectMapper.readValue(is, clazz);
-        } catch (Exception e) {
-            System.err.println("[ERROR] Failed to map JSON test data: " + e.getMessage());
-            return null;
-        }
-    }
 }

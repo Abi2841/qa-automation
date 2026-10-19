@@ -45,7 +45,7 @@ public final class ExtentManager {
             extentReports.setSystemInfo("Target Browser", ConfigReader.getBrowser());
             extentReports.setSystemInfo("Headless", String.valueOf(ConfigReader.isHeadless()));
             // getProperty (not the required accessors) so an unset URL never breaks report creation
-            for (String key : new String[]{"admin.portal.url", "employer.portal.url", "api.base.url", "base.url"}) {
+            for (String key : new String[]{"admin.portal.url", "employer.portal.url", "api.base.url"}) {
                 String value = ConfigReader.getProperty(key);
                 if (value != null) {
                     extentReports.setSystemInfo(key, value);

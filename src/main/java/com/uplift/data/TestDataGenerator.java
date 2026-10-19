@@ -142,10 +142,6 @@ public final class TestDataGenerator {
         return local + "@example.com";
     }
 
-    public static boolean isInboxConfigured() {
-        return ConfigReader.isSet("inbox.username") && ConfigReader.isSet("inbox.password");
-    }
-
     /**
      * Strong, run-unique password for the employer admin account. Never logged.
      */

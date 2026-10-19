@@ -13,7 +13,7 @@ import java.util.Properties;
  * 1. Java System Properties (e.g., -Dbrowser=edge -Dheadless=false)
  * 2. Operating System Environment Variables (admin.password -> ADMIN_PASSWORD), used by Jenkins credentials
  * 3. Optional local secrets.properties file (gitignored, for local credentials)
- * 4. environments/&lt;env&gt;.properties selected with -Denv=qa|demo (default qa)
+ * 4. environments/&lt;env&gt;.properties selected with -Denv=<name> (default qa)
  * 5. Common config.properties file on the test classpath
  *
  * No credentials have defaults in code: required values that are missing fail fast with a clear message.
@@ -148,10 +148,6 @@ public final class ConfigReader {
     }
 
     // Typed configuration accessors
-    public static String getBaseUrl() {
-        return getRequired("base.url");
-    }
-
     public static String getAdminPortalUrl() {
         return getRequired("admin.portal.url");
     }

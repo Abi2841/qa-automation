@@ -13,7 +13,6 @@ public class EmployerLoginPage extends BasePage {
             "input[type='email'], input[name='email'], input[name='username'], input#username, input#email");
     private final By passwordInput = By.cssSelector("input[type='password']");
     private final By loginButton = By.xpath("//button[@type='submit'] | //input[@type='submit']");
-    private final By errorMessageBanner = By.cssSelector("[role='alert'], .alert-danger, .error-message, [class*='error']");
 
     public EmployerLoginPage(WebDriver driver) {
         super(driver);
@@ -44,14 +43,6 @@ public class EmployerLoginPage extends BasePage {
         enterPassword(password);
         clickLogin();
         return new EmployerDashboardPage(driver);
-    }
-
-    public boolean isErrorMessageDisplayed() {
-        return isDisplayed(errorMessageBanner);
-    }
-
-    public String getErrorMessageText() {
-        return getText(errorMessageBanner);
     }
 
     /**

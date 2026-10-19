@@ -49,11 +49,4 @@ public class EmployeesPage extends PortalPage {
         searchEmployee(identifier);
         return isDisplayed(rowContaining(identifier), timeoutSeconds);
     }
-
-    /**
-     * Returns the employer dashboard view (menu is shared by every portal page).
-     */
-    public EmployerDashboardPage dashboard() {
-        return new EmployerDashboardPage(driver);
-    }
 }

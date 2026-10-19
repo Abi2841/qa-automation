@@ -1,27 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
-<!-- Framework self-test. Run with -Denv=demo (public sandboxes, not the system under test). -->
-<suite name="QA Automation Framework - Smoke Suite" verbose="1">
+<!-- Framework self-test: needs no browser, no network and no QA access. -->
+<suite name="Framework Self-Test" verbose="1">
 
     <listeners>
         <listener class-name="com.uplift.reporting.ExtentTestListener"/>
     </listeners>
 
-    <test name="Framework and Configuration Smoke Tests">
+    <test name="Config, test data, CSV and report checks">
         <classes>
             <class name="com.uplift.tests.FrameworkSmokeTest"/>
-        </classes>
-    </test>
-
-    <test name="API Client Smoke Tests">
-        <classes>
-            <class name="com.uplift.tests.api.SmokeApiTest"/>
-        </classes>
-    </test>
-
-    <test name="UI WebDriver Smoke Tests">
-        <classes>
-            <class name="com.uplift.tests.ui.SmokeUiTest"/>
         </classes>
     </test>
 

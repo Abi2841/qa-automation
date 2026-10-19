@@ -31,7 +31,7 @@ add employer admin (PEP...)           add 1 employee                       read 
 | D | 6 API checks with schema validation | Written, **not yet run on QA** |
 | E | Jenkinsfile: 5 stages, parameters, credentials, report, nightly | Written, **not yet run in Jenkins** |
 | F | Build on push, invite-email check | Written. Appium and parallel runs not done |
-| - | Framework self-test (config, data, CSV, browser, report, screenshots) | **Passing: 10 of 10** |
+| - | Framework self-test (config, data generators, CSV builder, report) | **Passing: 7 of 7** |
 
 The QA URLs, login and Swagger were not available while building, so the journey, validation and API tests are written from the application guide and still need their first run on QA. The first run will mostly be small locator fixes in the page classes. Until the values are set, each suite stops within seconds with a message naming what is missing.
 
@@ -47,7 +47,7 @@ The QA URLs, login and Swagger were not available while building, so the journey
 | `src/main/java/.../reporting` | ExtentReports listener |
 | `src/test/java/.../tests` | Preflight, Admin journey, Employer journey, data-driven validation, API tests |
 | `src/test/resources` | `environments/qa.properties`, `secrets.properties.example`, TestNG suites, test data, JSON schema |
-| `Jenkinsfile`, `run-pipeline.ps1` | Pipeline and a local copy of it |
+| `Jenkinsfile`, `.github/workflows/ci.yml` | Jenkins pipeline; a small GitHub check that compiles and runs the self-test |
 | `docs/` | Test cases and `CALL_DAY_GUIDE.md` |
 
 ## 4. Setup
@@ -65,16 +65,23 @@ In PowerShell, keep the quotes around `-D` options.
 
 | What | Command |
 | :--- | :--- |
-| Check all values work (run this first) | `mvn test "-DsuiteXmlFile=src/test/resources/testng-preflight.xml"` |
+| Check all values work (run this first: values, URLs, browser, API login, inbox) | `mvn test "-DsuiteXmlFile=src/test/resources/testng-preflight.xml"` |
 | **Everything, one command** | `mvn clean test` |
 | UI only | `mvn test "-DsuiteXmlFile=src/test/resources/testng-ui.xml"` |
 | API only | `mvn test "-DsuiteXmlFile=src/test/resources/testng-api.xml"` |
 | Watch the browser | add `"-Dheadless=false"` |
-| Framework self-test (no QA needed) | `mvn test "-Denv=demo" "-DsuiteXmlFile=src/test/resources/testng-smoke.xml"` |
+| Framework self-test (no QA needed) | `mvn test "-DsuiteXmlFile=src/test/resources/testng-smoke.xml"` |
 
 Results: `reports/ExtentReport.html` (report), `reports/screenshots/` (failure screenshots), `target/surefire-reports/` (raw results).
 
-On a call, follow `docs/CALL_DAY_GUIDE.md`: what to ask, where each value goes, and how to fix a locator.
+### On call day (short version)
+
+1. Ask for: 3 URLs, admin login, Swagger (login path, create/get employee paths, field names, token location).
+2. Put URLs and paths in `environments/qa.properties`, passwords in `secrets.properties`.
+3. Run the preflight command above and fix anything red.
+4. Run `mvn test "-Dtest=AdminPortalJourneyTest" "-Dheadless=false"`, fix locators one line at a time, then run `mvn clean test`.
+
+Details, a value-to-file table and locator tips: `docs/CALL_DAY_GUIDE.md`.
 
 ## 6. Jenkins
 

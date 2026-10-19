@@ -47,10 +47,6 @@ public class EmployersPage extends PortalPage {
         }
     }
 
-    public boolean isEmployerListed(String companyName) {
-        return getEmployerRowText(companyName) != null;
-    }
-
     /**
      * Opens an employer record from the listing to manage its admins.
      */

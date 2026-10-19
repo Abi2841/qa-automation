@@ -319,12 +319,4 @@ public abstract class BasePage {
     public String getPageText() {
         return driver.findElement(By.tagName("body")).getText();
     }
-
-    public String getTitle() {
-        return driver.getTitle();
-    }
-
-    public String getCurrentUrl() {
-        return driver.getCurrentUrl();
-    }
 }

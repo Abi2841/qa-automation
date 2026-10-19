@@ -2,11 +2,9 @@ package com.uplift.api;
 
 import com.uplift.config.ConfigReader;
 import io.restassured.builder.RequestSpecBuilder;
-import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.filter.log.LogDetail;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
-import io.restassured.specification.ResponseSpecification;
 
 /**
  * Factory class for reusable REST Assured RequestSpecification and ResponseSpecification objects.
@@ -47,15 +45,5 @@ public final class ApiSpecFactory {
         }
 
         return builder.build();
-    }
-
-    /**
-     * Creates a reusable response specification asserting an expected HTTP status code.
-     */
-    public static ResponseSpecification getResponseSpec(int expectedStatusCode) {
-        return new ResponseSpecBuilder()
-                .expectStatusCode(expectedStatusCode)
-                .expectContentType(ContentType.JSON)
-                .build();
     }
 }

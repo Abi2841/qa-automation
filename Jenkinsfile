@@ -15,7 +15,7 @@ pipeline {
     agent any
 
     parameters {
-        choice(name: 'ENVIRONMENT', choices: ['qa', 'demo'], description: 'Target environment (src/test/resources/environments/<name>.properties)')
+        choice(name: 'ENVIRONMENT', choices: ['qa'], description: 'Target environment (a new one = a new file in src/test/resources/environments/)')
         choice(name: 'BROWSER', choices: ['chrome', 'edge', 'firefox'], description: 'Browser for UI tests')
         booleanParam(name: 'HEADLESS', defaultValue: true, description: 'Run the browser headless')
         string(name: 'NOTIFY_EMAIL', defaultValue: '', description: 'Optional: email address(es) notified when the build is failed or unstable')

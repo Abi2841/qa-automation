@@ -6,7 +6,7 @@ import org.openqa.selenium.WebDriver;
 
 /**
  * Page Object representing the Admin Portal Dashboard.
- * Handles top-level navigation and session logout.
+ * Handles top-level navigation.
  */
 public class AdminDashboardPage extends PortalPage {
 
@@ -28,10 +28,5 @@ public class AdminDashboardPage extends PortalPage {
     public EmployersPage navigateToEmployers() {
         navigateTo("Employers");
         return new EmployersPage(driver);
-    }
-
-    public AdminLoginPage clickLogout() {
-        logout();
-        return new AdminLoginPage(driver);
     }
 }

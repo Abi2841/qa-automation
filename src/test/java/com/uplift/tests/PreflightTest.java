@@ -1,10 +1,12 @@
 package com.uplift.tests;
 
 import com.uplift.api.EmployeeApiService;
+import com.uplift.base.DriverFactory;
 import com.uplift.config.ConfigReader;
 import com.uplift.reporting.ExtentTestListener;
 import com.uplift.reporting.ReportLogger;
 import com.uplift.utils.EmailInboxHandler;
+import org.openqa.selenium.WebDriver;
 import org.testng.Assert;
 import org.testng.SkipException;
 import org.testng.annotations.Listeners;
@@ -71,7 +73,21 @@ public class PreflightTest {
         assertReachable("api.base.url");
     }
 
-    @Test(priority = 5, description = "Preflight 5: API login returns a token with the documented credentials")
+    @Test(priority = 5, description = "Preflight 5: the browser starts and opens the Admin portal")
+    public void browserOpensAdminPortal() {
+        skipUnlessSet("admin.portal.url");
+        WebDriver driver = DriverFactory.initDriver();
+        try {
+            driver.get(ConfigReader.getRequired("admin.portal.url"));
+            ReportLogger.info("Browser opened: '" + driver.getTitle() + "' at " + driver.getCurrentUrl());
+            Assert.assertFalse(driver.getCurrentUrl().startsWith("chrome-error") || driver.getCurrentUrl().startsWith("data:"),
+                    "The Admin portal page did not load in the browser");
+        } finally {
+            DriverFactory.quitDriver();
+        }
+    }
+
+    @Test(priority = 6, description = "Preflight 6: API login returns a token with the documented credentials")
     public void apiLoginReturnsToken() {
         skipUnlessSet("api.base.url", "api.auth.endpoint", "api.auth.username", "api.auth.password");
         try {
@@ -84,7 +100,7 @@ public class PreflightTest {
         }
     }
 
-    @Test(priority = 6, description = "Preflight 6: test inbox login (IMAP) works")
+    @Test(priority = 7, description = "Preflight 7: test inbox login (IMAP) works")
     public void inboxLoginWorks() {
         skipUnlessSet("inbox.username", "inbox.password");
         try {

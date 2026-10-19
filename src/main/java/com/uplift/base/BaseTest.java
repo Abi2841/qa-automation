@@ -26,8 +26,4 @@ public abstract class BaseTest {
     public void tearDown() {
         DriverFactory.quitDriver();
     }
-
-    protected WebDriver getDriver() {
-        return DriverFactory.getDriver();
-    }
 }
