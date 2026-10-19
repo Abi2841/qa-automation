@@ -94,6 +94,20 @@ public final class EmailInboxHandler {
                 .until(r -> findLatest(r, notBefore));
     }
 
+    /**
+     * Opens and closes an IMAP connection with the configured inbox login (used by the preflight check).
+     */
+    public static void verifyLogin() throws MessagingException {
+        Properties props = new Properties();
+        props.put("mail.store.protocol", "imaps");
+        try (Store store = Session.getInstance(props).getStore("imaps")) {
+            store.connect(ConfigReader.getRequired("inbox.imap.host"),
+                    Integer.parseInt(ConfigReader.getProperty("inbox.imap.port", "993")),
+                    ConfigReader.getRequired("inbox.username"),
+                    ConfigReader.getRequired("inbox.password"));
+        }
+    }
+
     private static Email findLatest(String recipient, Date notBefore) {
         Properties props = new Properties();
         props.put("mail.store.protocol", "imaps");
