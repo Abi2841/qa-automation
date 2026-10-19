@@ -59,7 +59,8 @@ public final class ScreenshotUtils {
             Files.copy(srcFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
 
             return "screenshots/" + fileName;
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
+            // Never let a screenshot problem hide the original test failure
             System.err.println("[WARN] Failed to save screenshot file: " + e.getMessage());
             return null;
         }

@@ -41,9 +41,16 @@ public final class ExtentManager {
             extentReports.attachReporter(sparkReporter);
             extentReports.setSystemInfo("OS", System.getProperty("os.name"));
             extentReports.setSystemInfo("Java Version", System.getProperty("java.version"));
+            extentReports.setSystemInfo("Environment", ConfigReader.getEnvironment());
             extentReports.setSystemInfo("Target Browser", ConfigReader.getBrowser());
-            extentReports.setSystemInfo("Base URL", ConfigReader.getBaseUrl());
-            extentReports.setSystemInfo("API Base URL", ConfigReader.getApiBaseUrl());
+            extentReports.setSystemInfo("Headless", String.valueOf(ConfigReader.isHeadless()));
+            // getProperty (not the required accessors) so an unset URL never breaks report creation
+            for (String key : new String[]{"admin.portal.url", "employer.portal.url", "api.base.url", "base.url"}) {
+                String value = ConfigReader.getProperty(key);
+                if (value != null) {
+                    extentReports.setSystemInfo(key, value);
+                }
+            }
         }
         return extentReports;
     }

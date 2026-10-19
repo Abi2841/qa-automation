@@ -9,7 +9,10 @@ import org.openqa.selenium.edge.EdgeOptions;
 import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.firefox.FirefoxOptions;
 
+import java.io.File;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * ThreadSafe WebDriver factory to initialize, retrieve, and quit browser instances.
@@ -18,6 +21,7 @@ import java.time.Duration;
 public final class DriverFactory {
 
     private static final ThreadLocal<WebDriver> driverThreadLocal = new ThreadLocal<>();
+    private static final File DOWNLOAD_DIR = new File("target/downloads").getAbsoluteFile();
 
     private DriverFactory() {
         // Prevent direct instantiation
@@ -43,6 +47,7 @@ public final class DriverFactory {
                 : browser.toLowerCase().trim();
 
         boolean headless = ConfigReader.isHeadless();
+        DOWNLOAD_DIR.mkdirs();
         WebDriver driver;
 
         switch (targetBrowser) {
@@ -51,6 +56,11 @@ public final class DriverFactory {
                 if (headless) {
                     firefoxOptions.addArguments("-headless");
                 }
+                // Save downloads (portal CSV template) without a dialog
+                firefoxOptions.addPreference("browser.download.folderList", 2);
+                firefoxOptions.addPreference("browser.download.dir", DOWNLOAD_DIR.getPath());
+                firefoxOptions.addPreference("browser.helperApps.neverAsk.saveToDisk",
+                        "text/csv,application/csv,application/vnd.ms-excel,application/octet-stream");
                 driver = new FirefoxDriver(firefoxOptions);
                 break;
 
@@ -63,6 +73,8 @@ public final class DriverFactory {
                 edgeOptions.addArguments("--disable-gpu");
                 edgeOptions.addArguments("--no-sandbox");
                 edgeOptions.addArguments("--disable-dev-shm-usage");
+                edgeOptions.addArguments("--window-size=1920,1080");
+                edgeOptions.setExperimentalOption("prefs", downloadPrefs());
                 driver = new EdgeDriver(edgeOptions);
                 break;
 
@@ -77,6 +89,7 @@ public final class DriverFactory {
                 chromeOptions.addArguments("--no-sandbox");
                 chromeOptions.addArguments("--disable-dev-shm-usage");
                 chromeOptions.addArguments("--window-size=1920,1080");
+                chromeOptions.setExperimentalOption("prefs", downloadPrefs());
                 driver = new ChromeDriver(chromeOptions);
                 break;
         }
@@ -91,6 +104,20 @@ public final class DriverFactory {
 
         driverThreadLocal.set(driver);
         return driver;
+    }
+
+    private static Map<String, Object> downloadPrefs() {
+        Map<String, Object> prefs = new HashMap<>();
+        prefs.put("download.default_directory", DOWNLOAD_DIR.getPath());
+        prefs.put("download.prompt_for_download", false);
+        return prefs;
+    }
+
+    /**
+     * Folder where the browser saves downloaded files (e.g. the bulk-upload CSV template).
+     */
+    public static File getDownloadDirectory() {
+        return DOWNLOAD_DIR;
     }
 
     /**

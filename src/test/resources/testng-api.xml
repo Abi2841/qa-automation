@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!-- Part D. When run on its own, the UI cross-check needs employer.admin.email / employer.admin.password. -->
 <suite name="Part D - Employee REST Assured API Suite" verbose="1">
 
     <listeners>

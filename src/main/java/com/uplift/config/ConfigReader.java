@@ -9,18 +9,23 @@ import java.util.Properties;
 /**
  * Central configuration reader for the test framework.
  *
- * Implements a layered configuration resolution strategy:
+ * Implements a layered configuration resolution strategy (first non-empty value wins):
  * 1. Java System Properties (e.g., -Dbrowser=edge -Dheadless=false)
- * 2. Operating System Environment Variables (e.g., QA_BASE_URL, API_AUTH_TOKEN)
+ * 2. Operating System Environment Variables (admin.password -> ADMIN_PASSWORD), used by Jenkins credentials
  * 3. Optional local secrets.properties file (gitignored, for local credentials)
- * 4. Default config.properties file on the test classpath
+ * 4. environments/&lt;env&gt;.properties selected with -Denv=qa|demo (default qa)
+ * 5. Common config.properties file on the test classpath
+ *
+ * No credentials have defaults in code: required values that are missing fail fast with a clear message.
  */
 public final class ConfigReader {
 
     private static final Properties properties = new Properties();
     private static final Properties secrets = new Properties();
-    private static final String DEFAULT_CONFIG_FILE = "config.properties";
+    private static final String COMMON_CONFIG_FILE = "config.properties";
+    private static final String ENVIRONMENTS_DIR = "environments/";
     private static final String SECRETS_FILE = "secrets.properties";
+    private static final String DEFAULT_ENVIRONMENT = "qa";
 
     static {
         loadProperties();
@@ -32,42 +37,60 @@ public final class ConfigReader {
     }
 
     private static void loadProperties() {
-        try (InputStream input = ConfigReader.class.getClassLoader().getResourceAsStream(DEFAULT_CONFIG_FILE)) {
-            if (input != null) {
-                properties.load(input);
-            } else {
-                System.err.println("[WARN] " + DEFAULT_CONFIG_FILE + " not found on classpath.");
+        if (!loadClasspathFile(COMMON_CONFIG_FILE, properties)) {
+            System.err.println("[WARN] " + COMMON_CONFIG_FILE + " not found on classpath.");
+        }
+        // Loaded second so environment values override the common defaults
+        String envFile = ENVIRONMENTS_DIR + getEnvironment() + ".properties";
+        if (!loadClasspathFile(envFile, properties)) {
+            throw new IllegalStateException("Unknown environment '" + getEnvironment()
+                    + "': expected src/test/resources/" + envFile);
+        }
+    }
+
+    private static boolean loadClasspathFile(String resource, Properties target) {
+        try (InputStream input = ConfigReader.class.getClassLoader().getResourceAsStream(resource)) {
+            if (input == null) {
+                return false;
             }
+            target.load(input);
+            return true;
         } catch (IOException e) {
-            System.err.println("[ERROR] Failed to load " + DEFAULT_CONFIG_FILE + ": " + e.getMessage());
+            throw new IllegalStateException("Failed to load " + resource + ": " + e.getMessage(), e);
         }
     }
 
     private static void loadSecrets() {
         // First try to load from classpath
-        try (InputStream input = ConfigReader.class.getClassLoader().getResourceAsStream(SECRETS_FILE)) {
-            if (input != null) {
-                secrets.load(input);
-                return;
-            }
-        } catch (IOException ignored) {
-            // secrets file is optional
+        if (loadClasspathFile(SECRETS_FILE, secrets)) {
+            return;
         }
 
-        // Second fallback: check filesystem in project root or test resources
+        // Second fallback: check filesystem in test resources
         File localSecrets = new File("src/test/resources/" + SECRETS_FILE);
         if (localSecrets.exists()) {
             try (FileInputStream fis = new FileInputStream(localSecrets)) {
                 secrets.load(fis);
             } catch (IOException ignored) {
-                // optional
+                // secrets file is optional
             }
         }
     }
 
     /**
+     * Active environment name: -Denv=..., else TEST_ENV environment variable, else "qa".
+     */
+    public static String getEnvironment() {
+        String env = System.getProperty("env");
+        if (env == null || env.trim().isEmpty()) {
+            env = System.getenv("TEST_ENV");
+        }
+        return (env == null || env.trim().isEmpty()) ? DEFAULT_ENVIRONMENT : env.trim().toLowerCase();
+    }
+
+    /**
      * Resolves a configuration property value with priority:
-     * System Property > Environment Variable > secrets.properties > config.properties
+     * System Property > Environment Variable > secrets.properties > environment file > config.properties
      */
     public static String getProperty(String key, String defaultValue) {
         // 1. System property
@@ -76,7 +99,7 @@ public final class ConfigReader {
             return systemProperty.trim();
         }
 
-        // 2. Environment variable (check exact and uppercase with underscores)
+        // 2. Environment variable (uppercase with underscores)
         String envKey = key.toUpperCase().replace('.', '_');
         String envValue = System.getenv(envKey);
         if (envValue != null && !envValue.trim().isEmpty()) {
@@ -89,7 +112,7 @@ public final class ConfigReader {
             return secretValue.trim();
         }
 
-        // 4. Default config.properties
+        // 4/5. Environment file layered over config.properties
         String propertyValue = properties.getProperty(key);
         if (propertyValue != null && !propertyValue.trim().isEmpty()) {
             return propertyValue.trim();
@@ -103,39 +126,50 @@ public final class ConfigReader {
     }
 
     /**
-     * Retrieves sensitive secrets (passwords, auth tokens).
+     * Returns a value that the current test cannot run without, or throws an explanatory error.
      */
-    public static String getSecret(String key, String defaultValue) {
-        return getProperty(key, defaultValue);
+    public static String getRequired(String key) {
+        String value = getProperty(key);
+        if (value == null) {
+            throw new IllegalStateException("Missing required configuration '" + key + "' for environment '"
+                    + getEnvironment() + "'. Provide it with -D" + key + "=..., environment variable "
+                    + key.toUpperCase().replace('.', '_') + ", src/test/resources/secrets.properties "
+                    + "(see secrets.properties.example) or environments/" + getEnvironment() + ".properties.");
+        }
+        return value;
     }
 
-    public static String getSecret(String key) {
-        return getProperty(key, "");
+    public static boolean isSet(String key) {
+        return getProperty(key) != null;
+    }
+
+    private static int getInt(String key, int defaultValue) {
+        return Integer.parseInt(getProperty(key, String.valueOf(defaultValue)));
     }
 
     // Typed configuration accessors
     public static String getBaseUrl() {
-        return getProperty("base.url", "https://the-internet.herokuapp.com");
+        return getRequired("base.url");
     }
 
     public static String getAdminPortalUrl() {
-        return getProperty("admin.portal.url", getBaseUrl());
+        return getRequired("admin.portal.url");
     }
 
     public static String getEmployerPortalUrl() {
-        return getProperty("employer.portal.url", getBaseUrl());
+        return getRequired("employer.portal.url");
     }
 
     public static String getAdminUsername() {
-        return getSecret("admin.username", "super_admin_user");
+        return getRequired("admin.username");
     }
 
     public static String getAdminPassword() {
-        return getSecret("admin.password", "SuperAdminSecretPassword123!");
+        return getRequired("admin.password");
     }
 
     public static String getApiBaseUrl() {
-        return getProperty("api.base.url", "https://reqres.in/api");
+        return getRequired("api.base.url");
     }
 
     public static String getBrowser() {
@@ -147,15 +181,19 @@ public final class ConfigReader {
     }
 
     public static int getImplicitWait() {
-        return Integer.parseInt(getProperty("implicit.wait", "10"));
+        return getInt("implicit.wait", 0);
     }
 
     public static int getExplicitWait() {
-        return Integer.parseInt(getProperty("explicit.wait", "15"));
+        return getInt("explicit.wait", 20);
+    }
+
+    public static int getShortWait() {
+        return getInt("short.wait", 5);
     }
 
     public static int getPageLoadTimeout() {
-        return Integer.parseInt(getProperty("page.load.timeout", "30"));
+        return getInt("page.load.timeout", 60);
     }
 
     public static boolean isScreenshotOnFailure() {
@@ -164,5 +202,9 @@ public final class ConfigReader {
 
     public static String getReportPath() {
         return getProperty("report.path", "reports/ExtentReport.html");
+    }
+
+    public static String getTestDataPrefix() {
+        return getProperty("test.data.prefix", "QA-AUTO-");
     }
 }

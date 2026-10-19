@@ -1,16 +1,25 @@
 package com.uplift.data;
 
+import com.uplift.config.ConfigReader;
+import com.uplift.models.EmployeeModel;
+import com.uplift.reporting.ReportLogger;
+
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Random;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Function;
 
 /**
- * Utility to generate fresh CSV bulk upload files dynamically for each test run.
- * Guarantees that valid rows have unique emails and IDs to avoid duplicate collisions,
- * while maintaining the 2 intentional validation flaws (Row 4 and Row 5).
+ * Builds the bulk-upload CSV from the template downloaded from the Employer portal, so the file always
+ * has exactly the columns (names and order) the portal expects.
+ *
+ * Each template column is mapped to an employee field by keyword (e.g. "PPSN", "Date of birth");
+ * unmapped columns are left blank and reported as a warning.
  */
 public final class CsvTestDataGenerator {
 
@@ -19,43 +28,101 @@ public final class CsvTestDataGenerator {
     }
 
     /**
-     * Generates a 5-record CSV file (3 valid, 2 invalid) at the target file location.
+     * Reads the header row of the portal template.
      */
-    public static File createFiveRecordCsv(String targetFilePath) throws IOException {
+    public static List<String> readTemplateHeader(File template) throws IOException {
+        List<String> lines = Files.readAllLines(template.toPath(), StandardCharsets.UTF_8);
+        if (lines.isEmpty() || lines.get(0).trim().isEmpty()) {
+            throw new IllegalStateException("Downloaded CSV template " + template + " has no header row");
+        }
+        String header = lines.get(0).replace("﻿", ""); // strip UTF-8 BOM written by Excel
+        List<String> columns = new ArrayList<>();
+        for (String column : header.split(",", -1)) {
+            columns.add(column.trim().replaceAll("^\"|\"$", ""));
+        }
+        return columns;
+    }
+
+    /**
+     * Writes one row per employee in the template's column order.
+     */
+    public static File writeCsv(List<String> header, List<EmployeeModel> rows, String targetFilePath) throws IOException {
         File file = new File(targetFilePath);
         File parentDir = file.getParentFile();
         if (parentDir != null && !parentDir.exists()) {
             parentDir.mkdirs();
         }
 
-        String timestamp = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-        int rand = 1000 + new Random().nextInt(9000);
-
-        String id1 = "QA-AUTO-E" + timestamp.substring(8) + "1";
-        String id2 = "QA-AUTO-E" + timestamp.substring(8) + "2";
-        String id3 = "QA-AUTO-E" + timestamp.substring(8) + "3";
-        String id4 = "QA-AUTO-E" + timestamp.substring(8) + "4";
-
-        try (FileWriter writer = new FileWriter(file)) {
-            // Header row
-            writer.write("Employee ID,First Name,Last Name,Email,Department,Date of Joining,Salary\n");
-
-            // Row 1 - VALID
-            writer.write(id1 + ",QA-AUTO-Alice,Smith,qa-auto-alice-" + timestamp + rand + "@example.com,Finance,2025-02-01,70000\n");
-
-            // Row 2 - VALID
-            writer.write(id2 + ",QA-AUTO-Bob,Jones,qa-auto-bob-" + timestamp + rand + "@example.com,Marketing,2025-03-15,55000\n");
-
-            // Row 3 - VALID
-            writer.write(id3 + ",QA-AUTO-Charlie,Brown,qa-auto-charlie-" + timestamp + rand + "@example.com,Operations,2025-04-10,60000\n");
-
-            // Row 4 - INVALID (Malformed Email syntax)
-            writer.write(id4 + ",QA-AUTO-Diana,Prince,invalid-email-missing-at-domain,Sales,2025-05-01,58000\n");
-
-            // Row 5 - INVALID (Duplicate Employee ID of Row 1 & negative salary)
-            writer.write(id1 + ",QA-AUTO-Edward,Taylor,qa-auto-edward-" + timestamp + rand + "@example.com,HR,2025-06-01,-1000\n");
+        List<Function<EmployeeModel, String>> mappers = new ArrayList<>();
+        List<String> unmapped = new ArrayList<>();
+        for (String column : header) {
+            Function<EmployeeModel, String> mapper = mapperFor(column);
+            if (mapper == null) {
+                unmapped.add(column);
+                mapper = e -> "";
+            }
+            mappers.add(mapper);
+        }
+        if (!unmapped.isEmpty()) {
+            ReportLogger.warning("Template columns without test data (left blank): " + unmapped);
         }
 
+        StringBuilder csv = new StringBuilder(String.join(",", header)).append("\n");
+        for (EmployeeModel employee : rows) {
+            List<String> values = new ArrayList<>();
+            for (Function<EmployeeModel, String> mapper : mappers) {
+                values.add(escape(mapper.apply(employee)));
+            }
+            csv.append(String.join(",", values)).append("\n");
+        }
+        Files.write(file.toPath(), csv.toString().getBytes(StandardCharsets.UTF_8));
         return file;
+    }
+
+    private static Function<EmployeeModel, String> mapperFor(String column) {
+        String c = column.toLowerCase().replaceAll("[^a-z]", "");
+        if (c.contains("first") || c.equals("forename") || c.equals("givenname")) {
+            return EmployeeModel::getFirstName;
+        }
+        if (c.contains("last") || c.contains("surname") || c.contains("familyname")) {
+            return EmployeeModel::getLastName;
+        }
+        if (c.equals("name") || c.equals("fullname") || c.equals("employeename")) {
+            return EmployeeModel::getFullName;
+        }
+        if (c.contains("email")) {
+            return EmployeeModel::getEmail;
+        }
+        if (c.contains("mobile") || c.contains("phone")) {
+            return EmployeeModel::getMobileNumber;
+        }
+        if (c.contains("birth") || c.equals("dob")) {
+            return e -> formatDate(e.getDateOfBirth());
+        }
+        if (c.contains("pps")) {
+            return EmployeeModel::getPpsn;
+        }
+        if (c.contains("start") || c.contains("joining") || c.contains("employmentdate")) {
+            return e -> formatDate(e.getStartDate());
+        }
+        return null;
+    }
+
+    private static String formatDate(String isoDate) {
+        if (isoDate == null || isoDate.isEmpty()) {
+            return "";
+        }
+        return LocalDate.parse(isoDate).format(
+                DateTimeFormatter.ofPattern(ConfigReader.getProperty("csv.date.format", "dd/MM/yyyy")));
+    }
+
+    private static String escape(String value) {
+        if (value == null) {
+            return "";
+        }
+        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
     }
 }

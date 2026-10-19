@@ -1,118 +1,87 @@
+// Declarative pipeline: Checkout -> Install -> API tests -> UI tests -> Publish report
+//
+// Jenkins prerequisites (Manage Jenkins):
+//   Plugins     : Pipeline, Git, Credentials Binding, HTML Publisher, JUnit, Mailer (for the optional email)
+//   Agent tools : JDK 17+, Maven 3.9+ and Chrome/Edge/Firefox on the PATH of the build agent
+//   Credentials : "Username with password" entries with these IDs (values never live in the repo):
+//       qa-admin-credentials   Admin portal test login
+//       qa-api-credentials     API credentials from the Swagger documentation
+//       qa-test-inbox          Test inbox (e.g. Gmail address + App Password) for invite emails
+//       qa-employer-admin      Activated QA-AUTO employer admin, used by the API stage's UI cross-check
+//   QA URLs     : set ADMIN_PORTAL_URL, EMPLOYER_PORTAL_URL and API_BASE_URL as global environment
+//                 variables (or commit them in src/test/resources/environments/qa.properties)
+
 pipeline {
     agent any
 
-    // Nightly scheduled build trigger (runs between 2:00 AM and 2:59 AM)
-    triggers {
-        cron('H 2 * * *')
-    }
-
-    // Build Parameters for Environment and Browser selection
     parameters {
-        choice(name: 'ENVIRONMENT', choices: ['QA', 'STAGING', 'DEV'], description: 'Target Execution Environment')
-        choice(name: 'BROWSER', choices: ['chrome', 'edge', 'firefox'], description: 'Browser for UI Automation Tests')
-        booleanParam(name: 'HEADLESS', defaultValue: true, description: 'Execute UI tests in Headless mode')
+        choice(name: 'ENVIRONMENT', choices: ['qa', 'demo'], description: 'Target environment (src/test/resources/environments/<name>.properties)')
+        choice(name: 'BROWSER', choices: ['chrome', 'edge', 'firefox'], description: 'Browser for UI tests')
+        booleanParam(name: 'HEADLESS', defaultValue: true, description: 'Run the browser headless')
+        string(name: 'NOTIFY_EMAIL', defaultValue: '', description: 'Optional: email address(es) notified when the build is failed or unstable')
     }
 
-    environment {
-        // Platform neutral tools: In Jenkins UI, configure 'Tools' with matching names (e.g. JDK_17 and Maven_3.9)
-        // If agent already has tools in PATH, defaults are preserved
-        PROJECT_DIR = "${env.WORKSPACE}"
-        
-        // Secure credentials retrieved from Jenkins Credentials Store (never committed to Git)
-        // Set up in Jenkins -> Manage Jenkins -> Credentials -> System -> Global:
-        // 1. Username with password: ID 'qa-admin-credentials'
-        // 2. Secret text: ID 'qa-api-token'
-        ADMIN_CREDS = credentials('qa-admin-credentials')
-        API_SECRET_TOKEN = credentials('qa-api-token')
+    triggers {
+        // Nightly run between 02:00 and 02:59
+        cron('H 2 * * *')
+        // Part F: build on every push (polls the repository every ~5 minutes; a GitHub webhook can replace this)
+        pollSCM('H/5 * * * *')
     }
 
     options {
         timeout(time: 60, unit: 'MINUTES')
         disableConcurrentBuilds()
-        ansiColor('xterm')
+        buildDiscarder(logRotator(numToKeepStr: '20'))
     }
 
     stages {
-        // Stage 1: Checkout SCM repository
         stage('Checkout') {
             steps {
-                echo "========================================="
-                echo "Stage 1: Checking out code from repository"
-                echo "Target Environment: ${params.ENVIRONMENT}"
-                echo "Target Browser:     ${params.BROWSER}"
-                echo "Headless Mode:      ${params.HEADLESS}"
-                echo "========================================="
+                echo "Environment: ${params.ENVIRONMENT} | Browser: ${params.BROWSER} | Headless: ${params.HEADLESS}"
                 checkout scm
             }
         }
 
-        // Stage 2: Install dependencies & compile classes
         stage('Install') {
             steps {
-                echo "========================================="
-                echo "Stage 2: Compiling project and downloading dependencies"
-                echo "========================================="
-                // Cross-platform Maven execution (bat on Windows agents, sh on Linux/Mac agents)
-                script {
-                    if (isUnix()) {
-                        sh 'mvn clean compile test-compile -DskipTests=true'
-                    } else {
-                        bat 'mvn clean compile test-compile -DskipTests=true'
-                    }
-                }
+                runMaven('clean test-compile')
             }
         }
 
-        // Stage 3: API Automation Tests (Fast backend feedback)
         stage('API tests') {
             steps {
-                echo "========================================="
-                echo "Stage 3: Running REST Assured API tests"
-                echo "========================================="
-                script {
-                    def mavenCmd = "mvn test -DsuiteXmlFile=src/test/resources/testng-api.xml -Dapi.auth.token=\"${API_SECRET_TOKEN}\""
-                    if (isUnix()) {
-                        sh mavenCmd
-                    } else {
-                        bat mavenCmd
-                    }
+                withCredentials([
+                    usernamePassword(credentialsId: 'qa-api-credentials', usernameVariable: 'API_AUTH_USERNAME', passwordVariable: 'API_AUTH_PASSWORD'),
+                    usernamePassword(credentialsId: 'qa-employer-admin', usernameVariable: 'EMPLOYER_ADMIN_EMAIL', passwordVariable: 'EMPLOYER_ADMIN_PASSWORD')
+                ]) {
+                    runMaven('test -DsuiteXmlFile=src/test/resources/testng-api.xml' +
+                             ' -Dreport.path=reports/api/ExtentReport.html -Dsurefire.reports.dir=target/surefire-reports/api')
                 }
             }
         }
 
-        // Stage 4: UI Automation Tests (End-to-End browser journeys)
         stage('UI tests') {
             steps {
-                echo "========================================="
-                echo "Stage 4: Running Selenium WebDriver UI tests"
-                echo "Browser: ${params.BROWSER} | Headless: ${params.HEADLESS}"
-                echo "========================================="
-                script {
-                    def mavenCmd = "mvn test -DsuiteXmlFile=src/test/resources/testng-smoke.xml -Dbrowser=${params.BROWSER} -Dheadless=${params.HEADLESS} -Dadmin.username=\"${ADMIN_CREDS_USR}\" -Dadmin.password=\"${ADMIN_CREDS_PSW}\""
-                    if (isUnix()) {
-                        sh mavenCmd
-                    } else {
-                        bat mavenCmd
-                    }
+                withCredentials([
+                    usernamePassword(credentialsId: 'qa-admin-credentials', usernameVariable: 'ADMIN_USERNAME', passwordVariable: 'ADMIN_PASSWORD'),
+                    usernamePassword(credentialsId: 'qa-test-inbox', usernameVariable: 'INBOX_USERNAME', passwordVariable: 'INBOX_PASSWORD')
+                ]) {
+                    runMaven('test -DsuiteXmlFile=src/test/resources/testng-ui.xml' +
+                             ' -Dreport.path=reports/ui/ExtentReport.html -Dsurefire.reports.dir=target/surefire-reports/ui')
                 }
             }
         }
 
-        // Stage 5: Publish ExtentReports HTML dashboard
         stage('Publish report') {
             steps {
-                echo "========================================="
-                echo "Stage 5: Publishing ExtentReports and Test Artifacts"
-                echo "========================================="
-                // Publish ExtentReports HTML Dashboard using HTML Publisher plugin
                 publishHTML([
-                    allowMissing: false,
+                    allowMissing: true,
                     alwaysLinkToLastBuild: true,
                     keepAll: true,
                     reportDir: 'reports',
-                    reportFiles: 'ExtentReport.html',
+                    reportFiles: 'api/ExtentReport.html, ui/ExtentReport.html',
                     reportName: 'Extent Test Report',
-                    reportTitles: 'QA Automation Test Results'
+                    reportTitles: 'API tests, UI tests'
                 ])
             }
         }
@@ -120,30 +89,38 @@ pipeline {
 
     post {
         always {
-            echo "Archiving Surefire XML reports, failure screenshots, and execution logs..."
-            // Archive screenshots, reports, and Surefire test XMLs
+            // Marks the build UNSTABLE when any test failed (Maven itself is told not to stop on test failures)
+            junit testResults: 'target/surefire-reports/**/TEST-*.xml', allowEmptyResults: true
+            // HTML reports, failure screenshots (reports/screenshots) and per-test logs (*-output.txt)
             archiveArtifacts artifacts: 'reports/**, target/surefire-reports/**', allowEmptyArchive: true
-
-            // Publish TestNG/JUnit test results to Jenkins
-            junit testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true
-        }
-        success {
-            echo "PIPELINE COMPLETED SUCCESSFULLY: All API and UI tests passed."
         }
         unstable {
-            echo "PIPELINE UNSTABLE: One or more test assertions failed."
+            notifyTeam('UNSTABLE: one or more tests failed')
         }
         failure {
-            echo "PIPELINE FAILED: Build error or critical test failure encountered."
-            // Optional Email / Slack notification: Triggered only when SMTP/Slack plugin is configured
-            script {
-                // If emailext plugin is configured in Jenkins, uncomment:
-                // emailext (
-                //     subject: "FAILED: Job '${env.JOB_NAME}' [Build #${env.BUILD_NUMBER}]",
-                //     body: "Build failed for environment ${params.ENVIRONMENT}. Check console output and Extent Report: ${env.BUILD_URL}",
-                //     recipientProviders: [[$class: 'DevelopersRecipientProvider'], [$class: 'CulpritsRecipientProvider']]
-                // )
-            }
+            notifyTeam('FAILED: build or pipeline error')
         }
+    }
+}
+
+// Runs Maven with the build parameters. Test failures do not stop the pipeline: the junit step
+// marks the build UNSTABLE instead, so the UI stage still runs and every report is published.
+def runMaven(String goals) {
+    String cmd = "mvn -B ${goals} -Denv=${params.ENVIRONMENT} -Dbrowser=${params.BROWSER} -Dheadless=${params.HEADLESS}" +
+                 ' -Dmaven.test.failure.ignore=true -Dmaven.test.redirectTestOutputToFile=true'
+    if (isUnix()) {
+        sh cmd
+    } else {
+        bat cmd
+    }
+}
+
+// Bonus: failure notification by email (requires the Mailer plugin and an SMTP server in Jenkins)
+def notifyTeam(String status) {
+    if (params.NOTIFY_EMAIL?.trim()) {
+        mail to: params.NOTIFY_EMAIL,
+             subject: "${status} - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+             body: "${status}\nEnvironment: ${params.ENVIRONMENT}, browser: ${params.BROWSER}\n" +
+                   "Report: ${env.BUILD_URL}Extent_20Test_20Report/\nConsole: ${env.BUILD_URL}console"
     }
 }

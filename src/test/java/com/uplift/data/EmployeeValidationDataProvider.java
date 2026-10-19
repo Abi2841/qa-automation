@@ -3,91 +3,43 @@ package com.uplift.data;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.testng.annotations.DataProvider;
 
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
- * TestNG DataProvider supplying negative and edge test data for Employee validation.
- * Loads externalized datasets from src/test/resources/testdata/employee-validation-scenarios.json.
+ * TestNG DataProvider supplying the Part C negative and boundary scenarios for the Add employee form.
+ * All data lives in src/test/resources/testdata/employee-validation-scenarios.json - nothing is hard-coded here,
+ * so a new validation rule is covered by adding a JSON entry, not code.
  */
 public class EmployeeValidationDataProvider {
 
     private static final String DATA_FILE = "testdata/employee-validation-scenarios.json";
 
-    @DataProvider(name = "invalidEmailProvider")
-    public static Object[][] getInvalidEmails() {
+    /**
+     * Each row: scenario id, description, field overrides (field name -> value), optional expected message text.
+     */
+    @DataProvider(name = "addEmployeeValidationScenarios")
+    public static Object[][] addEmployeeValidationScenarios() {
         JsonNode root = TestDataManager.getJsonNode(DATA_FILE);
-        if (root != null && root.has("invalidEmails")) {
-            JsonNode array = root.get("invalidEmails");
-            Object[][] data = new Object[array.size()][2];
-            for (int i = 0; i < array.size(); i++) {
-                data[i][0] = array.get(i).get("value").asText();
-                data[i][1] = array.get(i).get("scenario").asText();
-            }
-            return data;
+        if (root == null || !root.has("scenarios") || root.get("scenarios").size() == 0) {
+            throw new IllegalStateException("No scenarios found in " + DATA_FILE);
         }
-
-        // Fallback default
-        return new Object[][]{
-                {"invalid-email-missing-at-domain", "Missing @ and domain"},
-                {"qa.user@", "Missing domain after @"},
-                {"@example.com", "Missing username before @"}
-        };
-    }
-
-    @DataProvider(name = "invalidPpsnProvider")
-    public static Object[][] getInvalidPpsns() {
-        JsonNode root = TestDataManager.getJsonNode(DATA_FILE);
-        if (root != null && root.has("invalidPpsns")) {
-            JsonNode array = root.get("invalidPpsns");
-            Object[][] data = new Object[array.size()][2];
-            for (int i = 0; i < array.size(); i++) {
-                data[i][0] = array.get(i).get("value").asText();
-                data[i][1] = array.get(i).get("scenario").asText();
+        JsonNode scenarios = root.get("scenarios");
+        Object[][] data = new Object[scenarios.size()][4];
+        for (int i = 0; i < scenarios.size(); i++) {
+            JsonNode scenario = scenarios.get(i);
+            Map<String, String> overrides = new LinkedHashMap<>();
+            Iterator<Map.Entry<String, JsonNode>> fields = scenario.get("overrides").fields();
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> field = fields.next();
+                overrides.put(field.getKey(), field.getValue().asText());
             }
-            return data;
+            data[i][0] = scenario.get("id").asText();
+            data[i][1] = scenario.get("description").asText();
+            data[i][2] = overrides;
+            data[i][3] = scenario.has("expectedMessageContains") ? scenario.get("expectedMessageContains").asText() : null;
         }
-
-        return new Object[][]{
-                {"12345", "Too short (less than 7 digits)"},
-                {"123456789", "Missing trailing check letter"},
-                {"ABC1234T", "Alphabetic characters in numeric prefix"}
-        };
-    }
-
-    @DataProvider(name = "invalidMobileProvider")
-    public static Object[][] getInvalidMobiles() {
-        JsonNode root = TestDataManager.getJsonNode(DATA_FILE);
-        if (root != null && root.has("invalidMobiles")) {
-            JsonNode array = root.get("invalidMobiles");
-            Object[][] data = new Object[array.size()][2];
-            for (int i = 0; i < array.size(); i++) {
-                data[i][0] = array.get(i).get("value").asText();
-                data[i][1] = array.get(i).get("scenario").asText();
-            }
-            return data;
-        }
-
-        return new Object[][]{
-                {"12345", "Too short for Irish mobile"},
-                {"+35387ABCDEF", "Alphabetic characters in mobile number"}
-        };
-    }
-
-    @DataProvider(name = "under18DobProvider")
-    public static Object[][] getUnder18Dobs() {
-        JsonNode root = TestDataManager.getJsonNode(DATA_FILE);
-        if (root != null && root.has("under18Dobs")) {
-            JsonNode array = root.get("under18Dobs");
-            Object[][] data = new Object[array.size()][3];
-            for (int i = 0; i < array.size(); i++) {
-                data[i][0] = array.get(i).get("value").asText();
-                data[i][1] = array.get(i).get("age").asInt();
-                data[i][2] = array.get(i).get("scenario").asText();
-            }
-            return data;
-        }
-
-        return new Object[][]{
-                {"2012-05-15", 14, "14-year-old minor"},
-                {"2009-10-01", 17, "17-year-old minor below 18-year minimum"}
-        };
+        return data;
     }
 }

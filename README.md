@@ -1,452 +1,184 @@
 # Workplace Pension Platform (Ireland) - QA Automation Framework
 
-A production-grade, enterprise test automation framework built in **Java 17** using **Selenium WebDriver 4**, **TestNG**, **REST Assured**, and **ExtentReports 5**, designed for end-to-end testing of the Workplace Pension Platform across Super Admin Web Portal, Employer Web Portal, and Backend REST APIs.
+Java 17 · Selenium WebDriver 4 · TestNG · REST Assured · ExtentReports 5 · Maven · Jenkins
+
+Automates the journey **Admin creates employer → Admin adds employer admin → Employer admin adds employees → Employees appear in the list and receive an invite**, across the Admin portal, the Employer portal and the API.
 
 ---
 
-## 📑 Table of Contents
-1. [Project Overview & Architecture](#-project-overview--architecture)
-2. [Checklist of Requirements Status](#-checklist-of-requirements-status)
-3. [Setup & Execution Guide](#-setup--execution-guide)
-4. [Assumptions & SUT Discrepancies](#-assumptions--sut-discrepancies)
-5. [Observed Application & Framework Issues](#-observed-application--framework-issues)
-6. [Answers to Written Questions](#-answers-to-written-questions)
-7. [What to Add Next (Future Improvements)](#-what-to-add-next-future-improvements)
-8. [Manual Evidence Checklist](#-manual-evidence-checklist)
-9. [Jenkins CI/CD Declarative Pipeline](#-jenkins-cicd-declarative-pipeline)
+## 1. Status at a glance
+
+| Part | Requirement | Implementation | Verified |
+| :--- | :--- | :--- | :--- |
+| A | 15-25 test cases + automate/manual reasoning | `docs/TEST_CASES_PART_A.md` (24 cases, 17 automated) | ✅ |
+| B | Admin login → employer (name, CRN, address lookup, payroll date, IBAN/BIC) → employer admin (name, email, mobile, economic status, occupation, PEP) | `AdminPortalJourneyTest` | ⏳ needs QA env |
+| B | Invite email → verification code → set password → dashboard for that employer only → login | `EmployerPortalJourneyTest` + `EmailInboxHandler` (IMAP) | ⏳ needs QA env + inbox |
+| B | Manual employee, bulk upload from portal template (3 valid / 2 invalid, reason per row), logout | `EmployerPortalJourneyTest` | ⏳ needs QA env |
+| C | ONE data-driven test: empty fields, email, PPSN, mobile, duplicate, under 18 | `EmployeeValidationTest` + `testdata/employee-validation-scenarios.json` (16 rows) | ⏳ needs QA env |
+| D | Token, 401 without token, 201 + schema, GET read-back, 400 bad PPSN, UI↔API | `EmployeeApiTest` + `schemas/employee-response.schema.json` | ⏳ needs QA API + Swagger |
+| E | Jenkinsfile: 5 stages, parameters, credentials store, HTML report, artifacts, unstable on failure, nightly cron | `Jenkinsfile` | ⏳ needs a Jenkins run |
+| F | Build on push (pollSCM), failure email, employee invite email check | `Jenkinsfile`, `employeeReceivesIntroductionEmail` | ⏳ |
+| — | Framework self-test (config, generators, CSV builder, browser, HTTP client, report, failure screenshots) | `testng-smoke.xml` on `-Denv=demo` | ✅ 10/10 passing |
+
+> **Honest disclosure.** The QA URLs, Admin login and Swagger were not available while this framework was built, so the journey, validation and API suites have **not yet been executed against the QA environment**. Locators are anchored on the field labels named in the assignment's application guide (`Add employer`, `IBAN`, `PPSN`, …) and are kept in the page objects only. The first QA run may need small locator adjustments in those classes. Without configuration, every suite fails within seconds with a message naming the missing value, instead of timing out.
 
 ---
 
-## 🏛️ Project Overview & Architecture
+## 2. Architecture
 
 ```
-c:\Users\Arunnivetha\Uplift
-├── pom.xml                                  # Maven project configuration & dependencies
-├── .gitignore                               # Excludes build artifacts, secrets, and reports
-├── Jenkinsfile                              # Declarative CI/CD pipeline (5 stages + cron trigger)
-├── run-pipeline.ps1                         # Local PowerShell pipeline runner
-├── run-pipeline.bat                         # Local Batch pipeline runner
-├── README.md                                # Comprehensive documentation & written answers
-├── docs
-│   └── TEST_CASES_PART_A.md                 # Part A: Test Case Specification (22 scenarios)
-├── reports
-│   └── ExtentReport.html                    # ExtentReports 5 standalone HTML dashboard
-├── src
-│   ├── main
-│   │   └── java
-│   │       └── com
-│   │           └── uplift
-│   │               ├── api                  # API client, HTTP specs & EmployeeApiService
-│   │               │   ├── ApiClient.java
-│   │               │   ├── ApiSpecFactory.java
-│   │               │   └── EmployeeApiService.java
-│   │               ├── base                 # Base lifecycle & WebDriver factory
-│   │               │   ├── BaseApiTest.java
-│   │               │   ├── BaseTest.java
-│   │               │   └── DriverFactory.java
-│   │               ├── config               # Hierarchical configuration loader
-│   │               │   └── ConfigReader.java
-│   │               ├── data                 # Dynamic data generators & fixtures
-│   │               │   ├── CsvTestDataGenerator.java
-│   │               │   └── TestDataManager.java
-│   │               ├── models               # POJOs with QA-AUTO- prefixing
-│   │               │   ├── EmployeeModel.java
-│   │               │   ├── EmployerAdminModel.java
-│   │               │   └── EmployerModel.java
-│   │               ├── pages                # Page Object Model (POM) layer
-│   │               │   ├── BasePage.java
-│   │               │   ├── LoginPage.java
-│   │               │   ├── admin            # Super Admin Portal Pages
-│   │               │   │   ├── AdminDashboardPage.java
-│   │               │   │   ├── AdminLoginPage.java
-│   │               │   │   ├── CreateEmployerPage.java
-│   │               │   │   ├── EmployerDetailsPage.java
-│   │               │   │   └── EmployersPage.java
-│   │               │   └── employer         # Employer Portal Pages
-│   │               │       ├── AddEmployeePage.java
-│   │               │       ├── BulkUploadPage.java
-│   │               │       ├── EmployerDashboardPage.java
-│   │               │       ├── EmployerLoginPage.java
-│   │               │       └── EmployeesPage.java
-│   │               ├── reporting            # ExtentReports 5 initialization & listeners
-│   │               │   ├── ExtentManager.java
-│   │               │   └── ExtentTestListener.java
-│   │               └── utils                # Waits, screenshot capture & test inbox handler
-│   │                   ├── EmailInboxHandler.java
-│   │                   ├── ScreenshotUtils.java
-│   │                   └── WaitUtils.java
-│   └── test
-│       ├── java
-│       │   └── com
-│       │       └── uplift
-│       │           ├── data
-│       │           │   └── EmployeeValidationDataProvider.java
-│       │           └── tests
-│       │               ├── FrameworkSmokeTest.java
-│       │               ├── api
-│       │               │   ├── EmployeeApiTest.java
-│       │               │   └── SmokeApiTest.java
-│       │               └── ui
-│       │                   ├── AdminPortalJourneyTest.java
-│       │                   ├── EmployeeValidationTest.java
-│       │                   ├── EmployerPortalJourneyTest.java
-│       │                   └── SmokeUiTest.java
-│       └── resources
-│           ├── config.properties            # Environment defaults & timeouts
-│           ├── secrets.properties.example   # Secrets template (never committed)
-│           ├── testng-api.xml               # Part D REST Assured API suite
-│           ├── testng-smoke.xml             # Framework smoke test suite
-│           ├── testng-validation.xml        # Part C negative validation suite
-│           ├── testng-regression.xml        # Combined full regression suite
-│           └── testdata
-│               ├── bulk-employees-5records.csv # 5-record CSV fixture (3 valid, 2 invalid)
-│               ├── employee-validation-scenarios.json # Externalized validation datasets
-│               └── sample-data.json
+src/main/java/com/uplift
+├── config/ConfigReader         layered config: -D > env var > secrets.properties > environments/<env>.properties > config.properties
+├── base/DriverFactory          ThreadLocal WebDriver (chrome|edge|firefox, headless, download folder)
+├── base/BaseTest, BaseApiTest  one browser per test class / REST Assured base spec
+├── pages/                      Page Object Model - the ONLY place with locators
+│   ├── BasePage, PortalPage    label-based locators, explicit waits, dropdown/date/radio helpers, logout
+│   ├── admin/                  AdminLoginPage, AdminDashboardPage, EmployersPage, CreateEmployerPage, EmployerDetailsPage
+│   └── employer/               EmployerLoginPage, EmployerActivationPage, EmployerDashboardPage, EmployeesPage,
+│                               AddEmployeePage, BulkUploadPage
+├── api/                        ApiSpecFactory, ApiClient, EmployeeApiService (reusable token + employee helpers)
+├── models/                     EmployerModel, EmployerAdminModel, EmployeeModel
+├── data/                       TestDataGenerator (unique QA-AUTO- data, valid PPSN check letter, mod-97 IBAN),
+│                               CsvTestDataGenerator (CSV from the portal template), JourneyContext, TestDataManager
+├── reporting/                  ExtentManager, ExtentTestListener (screenshot on failure), ReportLogger
+└── utils/                      WaitUtils (no Thread.sleep), ScreenshotUtils, EmailInboxHandler (IMAP test inbox)
+
+src/test/java/com/uplift/tests
+├── ui/AdminPortalJourneyTest       Part B steps 1-3
+├── ui/EmployerPortalJourneyTest    Part B steps 4-7 (+ Part F invite email)
+├── ui/EmployeeValidationTest       Part C (single @Test, DataProvider)
+├── api/EmployeeApiTest             Part D
+└── FrameworkSmokeTest, api/SmokeApiTest, ui/SmokeUiTest   framework self-test
+
+src/test/resources
+├── config.properties, environments/qa.properties, environments/demo.properties, secrets.properties.example
+├── testng-regression.xml (default), testng-ui.xml, testng-api.xml, testng-validation.xml, testng-smoke.xml
+├── testdata/employee-validation-scenarios.json
+└── schemas/employee-response.schema.json
 ```
 
----
+How a run flows: Maven Surefire starts the TestNG suite → UI tests drive page objects with explicit waits → API tests call `EmployeeApiService` → the journey stores what it created in `JourneyContext`, so the Employer portal logs in as **the admin just created**, and Part C and the API cross-check reuse that admin → `ExtentTestListener` writes `reports/ExtentReport.html`, embedding a screenshot and saving it to `reports/screenshots/` on failure.
 
-## 📋 Checklist of Requirements Status
-
-| Part | Requirement Description | Implementation Status | Verification Status | Notes / Blockers |
-| :--- | :--- | :--- | :--- | :--- |
-| **Part A** | 15–25 test cases table (ID, scenario, type, priority, automated) + Rationale | **Completed** | **Verified** | 22 test cases in `docs/TEST_CASES_PART_A.md`. Explicit ROI rationale for 19 automated vs 2 manual cases. |
-| **Part B** | Admin logs in, creates employer (`QA-AUTO-` prefix, CRN, address, bank details) | **Coded (POM)** | **Blocked on Live SUT** | Page Objects & tests written (`AdminPortalJourneyTest`), but times out against configured mock (`the-internet.herokuapp.com`). |
-| **Part B** | Admin adds Employer Admin (name, email, mobile, economic status, PEP) | **Coded (Partial)** | **Blocked on Live SUT** | Coded in `EmployerDetailsPage`, but Irish fields (PEP, economic status, occupation) need mapping to real form locators. |
-| **Part B** | Employer Admin first login via invite email link & password set | **Coded (Stub)** | **Blocked on Live SUT** | `EmailInboxHandler` stubs token retrieval; times out waiting for employee portal nav menu on mock URL. |
-| **Part B** | Manual employee creation with PPSN, mobile, DOB, start date | **Coded (POM)** | **Blocked on Live SUT** | `AddEmployeePage` & `EmployeeModel` built with Irish fields; unverified against live portal UI. |
-| **Part B** | Bulk CSV upload (5 records: 3 valid, 2 invalid) with error summary verification | **Coded (POM)** | **Blocked on Live SUT** | `BulkUploadPage` and `CsvTestDataGenerator` generate dynamic file; partial upload assertion logic implemented. |
-| **Part B** | Session logout verification | **Coded (POM)** | **Blocked on Live SUT** | Implemented in `EmployerDashboardPage.clickLogout()`. |
-| **Part C** | Add Employee data-driven negative checks (empty fields, email, PPSN, mobile, duplicate, <18 DOB) | **Coded** | **Verified Syntax / Blocked on Live SUT** | DataProvider externalized in JSON. Fixed XML ampersand bug in `testng-validation.xml`. Tests require live portal. |
-| **Part C** | Unified single data-driven test runner | **Incomplete (Structural)** | **Incomplete** | Implemented as 6 distinct `@Test` methods rather than a single parameterized test method. |
-| **Part D** | Auth endpoint: get token, request without token returns 401 | **Coded & Ran** | **Verified on Mock API** | Tested via REST Assured (`EmployeeApiTest`). Passes on Reqres mock with relaxed assertions. |
-| **Part D** | Create employee: POST returns 201 & matches schema | **Coded & Ran** | **Verified on Mock API** | Tested via REST Assured. Schema & payload validation implemented. |
-| **Part D** | Read back: GET employee by ID and check data matches | **Coded & Ran** | **Verified on Mock API** | Implemented in `EmployeeApiTest.testGetEmployeeMatchesSubmittedData`. |
-| **Part D** | Bad PPSN validation: POST returns 400 Bad Request | **Coded & Ran** | **Verified on Mock API** | Implemented in `EmployeeApiTest.testCreateEmployeeWithInvalidPpsnReturns400BadRequest`. |
-| **Part D** | UI ↔ API cross-check: API employee visible in Employer portal | **Coded & Ran** | **Verified on Mock UI** | Hybrid Selenium + REST Assured test runs; falls back to title verification on mock UI. |
-| **Part E** | Declarative Jenkinsfile with 5 stages (Checkout, Install, API tests, UI tests, Publish report) | **Completed** | **Verified Syntax** | Production-grade Jenkinsfile with multi-OS support (`bat` on Windows, `sh` on Linux). |
-| **Part E** | Build parameters (`ENVIRONMENT`, `BROWSER`, `HEADLESS`) | **Completed** | **Verified** | Configured in Jenkinsfile `parameters` block. |
-| **Part E** | Credentials stored in Jenkins store, never in repo | **Completed** | **Verified** | Uses `credentials('qa-admin-credentials')` and `credentials('qa-api-token')`. |
-| **Part E** | HTML report published on build page & artifacts archived | **Completed** | **Verified** | `publishHTML` publishes ExtentReport; `archiveArtifacts` stores Surefire XML and screenshots. |
-| **Part E** | Nightly trigger `cron('H 2 * * *')` & build failure handling | **Completed** | **Verified** | Configured with `triggers { cron(...) }` and `post { failure { ... } }`. |
-| **Part E** | Real Jenkins build screenshots & execution evidence | **Pending Manual Capture** | **Incomplete** | Requires running on local or containerized Jenkins instance to capture screenshots. |
-| **Part F** | Bonus: Email arrival verification, Appium mobile smoke, Parallel execution | **Partial** | **Incomplete** | Email handler architecture documented; Appium and multi-browser grid not attempted. |
-
-> [!WARNING]
-> **Honest Disclosure:** The framework architecture, Page Object Models, test data generators, REST Assured services, and Jenkinsfile are fully implemented and compile without errors. However, because live staging credentials and QA URLs were not accessible during development, the UI journey tests were targeted against a public mock environment (`the-internet.herokuapp.com`), which causes element timeouts when locating pension-specific navigation menus. The project cannot be marked as 100% complete until executed against the real Pension Platform environment.
+Key design decisions:
+- **Locators by visible label.** The guide names the fields, and labels change less often than generated ids.
+- **One browser per class with one `@Test` per journey step.** The report shows exactly which step failed, and later steps are *skipped*, not failed.
+- **Unique data per run.** Every entity is prefixed `QA-AUTO-` and carries a run id. PPSNs carry a valid mod-23 check letter and IBANs have valid mod-97 check digits, so "valid" data is genuinely valid.
+- **Template-driven CSV.** The bulk file is built from the template downloaded in the portal, so the columns always match. Each invalid row has exactly one fault (invalid email, invalid PPSN).
+- **No `Thread.sleep`.** Explicit waits throughout, the implicit wait is 0, and inbox and download polling use `FluentWait`.
 
 ---
 
-## 🚀 Setup & Execution Guide
+## 3. Setup
 
-### Prerequisites
-1. **Java Development Kit (JDK 17 or higher):**
-   ```powershell
-   $env:JAVA_HOME = "C:\Program Files\Java\jdk-26.0.2.1"
-   $env:Path = "$env:JAVA_HOME\bin;$env:Path"
-   java -version
-   ```
-2. **Apache Maven (3.9+):**
-   ```powershell
-   mvn -version
-   ```
-3. **Google Chrome & ChromeDriver** (automatically managed via Selenium 4 WebDriverManager).
+Prerequisites: JDK 17+, Maven 3.9+, Chrome (or Edge/Firefox). Selenium Manager downloads the driver automatically.
 
----
-
-### Execution Commands
-
-> [!IMPORTANT]
-> **PowerShell Argument Quoting:** In Windows PowerShell, always wrap `-Dproperty=value` arguments with quotes (e.g. `"-DsuiteXmlFile=src/test/resources/testng-api.xml"`) to prevent PowerShell from splitting `.xml` into a separate lifecycle phase.
-
-#### 1. One-Command Smoke Suite (Passes 6/6)
 ```powershell
-$env:JAVA_HOME = "C:\Program Files\Java\jdk-26.0.2.1"; $env:Path = "$env:JAVA_HOME\bin;$env:Path"
-mvn clean test
+java -version
+mvn -v
+mvn -B clean test-compile        # resolves dependencies and compiles
 ```
 
-#### 2. Run REST Assured API Suite (Part D - Passes 6/6)
-```powershell
-mvn test "-DsuiteXmlFile=src/test/resources/testng-api.xml" "-Dapi.auth.token=sample_token"
-```
+### Configure the QA environment (values are sent separately with the assignment)
 
-#### 3. Run Data-Driven Validation Suite (Part C)
-```powershell
-mvn test "-DsuiteXmlFile=src/test/resources/testng-validation.xml"
-```
+1. **URLs and API contract.** Fill `src/test/resources/environments/qa.properties` (`admin.portal.url`, `employer.portal.url`, `api.base.url`, `api.auth.endpoint`, `api.employees.endpoint`). Alternatively, pass them as `-D…` flags or environment variables (`ADMIN_PORTAL_URL`, …). Align the field names and `schemas/employee-response.schema.json` with the Swagger.
+2. **Secrets.** Copy `src/test/resources/secrets.properties.example` to `secrets.properties` (gitignored) and fill in the Admin login, the API credentials and the test inbox.
+3. **Test inbox.** Use a Gmail account with 2-step verification and an [App Password](https://myaccount.google.com/apppasswords). The admin and employee emails become `<you>+qa-auto-…@gmail.com`, so each run's invite is found by its unique address.
 
-#### 4. Run Full Regression Suite (Parts B, C, D & Smoke)
-```powershell
-mvn test "-DsuiteXmlFile=src/test/resources/testng-regression.xml"
-```
-
-#### 5. Run Across Different Browsers or Headed Mode
-```powershell
-# Headed (Visual) execution on Google Chrome:
-mvn test "-Dbrowser=chrome" "-Dheadless=false"
-
-# Headless execution on Microsoft Edge:
-mvn test "-Dbrowser=edge" "-Dheadless=true"
-```
-
-#### 6. Run Against the Real Pension Platform QA Environment
-When live staging credentials and URLs are supplied, execute without changing any code:
-```powershell
-mvn test "-Dadmin.portal.url=https://qa-admin.pensionplatform.ie" `
-         "-Demployer.portal.url=https://qa-employer.pensionplatform.ie" `
-         "-Dapi.base.url=https://qa-api.pensionplatform.ie/v1" `
-         "-Dadmin.username=qa_admin_ops" `
-         "-Dadmin.password=SecureAdminPass2026!" `
-         "-Dapi.auth.token=eyJhbGciOi..."
-```
+Only the provider's QA environment is ever targeted. Every created record is prefixed `QA-AUTO-` for cleanup.
 
 ---
 
-## 📌 Assumptions & SUT Discrepancies
+## 4. How to run
 
-1. **System Under Test (SUT) Availability:**
-   - **Assignment Stated:** Staging URLs, Admin portal test logins, and API base URL (Swagger) are provided separately, valid for 3 days.
-   - **Framework Reality:** Access was unavailable at framework construction. The framework was developed with full POM architecture and model definitions, but configured with public sandboxes (`the-internet.herokuapp.com` and `reqres.in`) as placeholders.
-2. **Irish Pension Domain Conventions:**
-   - **PPSN Format:** Follows Revenue Ireland standard: 7 digits followed by 1 or 2 letters (e.g., `1234567FA` or `1234567T`).
-   - **Banking:** Ireland operates within the SEPA zone requiring **IBAN** (e.g. `IE29 AIBK 9311 5212 3456 78`) and **BIC/SWIFT**, rather than UK account numbers and sort codes.
-   - **Compliance:** Employer Admin provisioning requires Politically Exposed Person (PEP) screening, economic status, and occupation.
-3. **Email Verification Handling:**
-   - For Employer Admin invitation links, `EmailInboxHandler` implements a provider switch. In production, this integrates with Mailosaur/Mailtrap REST APIs or queries a dedicated QA test inbox via IMAP.
-4. **Data Isolation Strategy:**
-   - All dynamic test entities (Companies, Admins, Employees) are prefixed with `QA-AUTO-` and timestamped to guarantee collision-free parallel execution and automated nightly cleanup.
+> PowerShell: quote every `-D` argument, e.g. `"-DsuiteXmlFile=…"`.
 
----
+| Goal | Command |
+| :--- | :--- |
+| **Everything (one command)**: framework checks, Part B, Part C, Part D | `mvn clean test` |
+| UI only (journey + data-driven checks) | `mvn test "-DsuiteXmlFile=src/test/resources/testng-ui.xml"` |
+| API only | `mvn test "-DsuiteXmlFile=src/test/resources/testng-api.xml"` |
+| Part C only (needs `employer.admin.email/password`) | `mvn test "-DsuiteXmlFile=src/test/resources/testng-validation.xml"` |
+| Framework self-test (no QA access needed) | `mvn test "-Denv=demo" "-DsuiteXmlFile=src/test/resources/testng-smoke.xml"` |
+| Watch the browser / other browser | add `"-Dheadless=false"` and/or `"-Dbrowser=edge"` |
+| Local copy of the Jenkins stages | `.\run-pipeline.ps1 -Environment qa -Browser chrome` |
 
-## 🔍 Observed Application & Framework Issues
-
-### Framework Defect 1: XML Syntax Error in Validation Suite (Resolved)
-- **File:** `src/test/resources/testng-validation.xml` (Line 9)
-- **Steps to Reproduce:** Run `mvn test "-DsuiteXmlFile=src/test/resources/testng-validation.xml"`.
-- **Observed Behavior:** Build fails immediately with `SAXParseException: The entity name must immediately follow the '&' in the entity reference`.
-- **Root Cause:** Unescaped ampersand `&` in the `<test name="Add Employee Form Negative & Boundary Validations">` attribute.
-- **Resolution:** Replaced with valid XML entity `&amp;`.
-
-### Application Discrepancy 2: Mock API Contract Mismatch in Part D
-- **File:** `src/test/java/com/uplift/tests/api/EmployeeApiTest.java`
-- **Steps to Reproduce:** Execute unauthenticated POST to `https://reqres.in/api/users`.
-- **Observed Behavior:** Reqres returns HTTP 201 Created instead of HTTP 401 Unauthorized because it does not enforce authentication.
-- **Impact:** Assertions had to accept `201` alongside `401` to pass on the mock server. Against the real Swagger API, strict assertion `Assert.assertEquals(response.getStatusCode(), 401)` must be enforced.
-
-### UX / Application Observation 3: Bulk CSV Upload Error Feedback
-- **Observation:** When uploading bulk CSV files with partial failures (e.g., Row 4 malformed email, Row 5 duplicate PPSN), many platforms fail the entire batch atomically without row-level reporting.
-- **Requirement:** As specified in the assignment, the pension platform should support partial imports (committing the 3 valid rows) while returning a distinct summary table showing exact line numbers and rejection reasons for the 2 failed records.
+Outputs:
+- `reports/ExtentReport.html` (HTML report)
+- `reports/screenshots/` (failure screenshots)
+- `target/surefire-reports/` (TestNG/JUnit XML)
+- `target/downloads/` (downloaded CSV template) and `target/test-data/` (generated CSV)
 
 ---
 
-## 💬 Answers to Written Questions
+## 5. Jenkins (Part E)
 
-### 1. If a test fails in Jenkins, how do you find out whether the problem is the application or the test?
-I triage failures using a systematic 4-step diagnostic process:
-1. **Analyze Error Type & Stack Trace:**
-   - `TimeoutException` or `NoSuchElementException`: Usually indicates locator drift, timing/rendering delays, or slow backend responses.
-   - `AssertionError` (e.g. expected 201 Created but received 500 Internal Server Error or 422 Unprocessable Entity): Strong indicator of an application bug or broken API contract.
-2. **Review Execution Artifacts:**
-   - Inspect the ExtentReports HTML dashboard and failure screenshot captured at the exact moment of failure.
-   - Check if the page displays an unexpected error banner, crash screen, or modal dialog blocking interaction.
-3. **Correlate with Application & Network Logs:**
-   - Check DevTools network logs or backend server logs during the build timestamp to identify unhandled 5xx exceptions or dropped database connections.
-4. **Reproduce Locally in Headed Mode:**
-   - Run the exact failed test against the same environment using the recorded test data. If it fails consistently with the same error, it is an application defect; if it passes intermittently, it is a test timing/flakiness issue.
+`Jenkinsfile` stages: **Checkout → Install → API tests → UI tests → Publish report**.
+- Parameters: `ENVIRONMENT` (qa/demo), `BROWSER`, `HEADLESS`, optional `NOTIFY_EMAIL`.
+- Credentials come from the Jenkins store (`qa-admin-credentials`, `qa-api-credentials`, `qa-test-inbox`, `qa-employer-admin`). They are bound as environment variables, which `ConfigReader` reads, and never appear on the command line or in the repo.
+- Each stage writes its own report (`reports/api`, `reports/ui`) and Surefire folder, so nothing is overwritten. `publishHTML` shows both on the build page. `archiveArtifacts` keeps the reports, screenshots and per-test logs.
+- Test failures don't stop the pipeline (`-Dmaven.test.failure.ignore`). The `junit` step marks the build **UNSTABLE**, and a compile or pipeline error marks it **FAILED**.
+- Triggers: `cron('H 2 * * *')` nightly and `pollSCM('H/5 * * * *')` on push (Part F). Failed or unstable builds email `NOTIFY_EMAIL`.
+
+Local Jenkins: `docker run -p 8080:8080 jenkins/jenkins:lts`. The agent also needs Maven and a browser, so a Windows Jenkins (`jenkins.war`) on the same machine is the simplest option here.
 
 ---
 
-### 2. How would you run the UI tests in parallel on Jenkins agents and alert the team on failure?
-1. **TestNG Thread-Level Parallelism:**
-   - Configure `testng.xml` with `parallel="classes"` or `parallel="methods"` and `thread-count="4"`.
-   - Ensure `ThreadLocal<WebDriver>` is used in `DriverFactory` (as implemented in this framework) so each browser thread operates in complete isolation without state bleeding.
-2. **Distributed Jenkins Agent Execution:**
-   - Utilize Jenkins declarative pipeline `parallel` blocks to distribute test subsets across multiple worker nodes (e.g., Node A runs Admin journeys, Node B runs Employer journeys, Node C runs API tests).
-   - Alternatively, integrate Selenium Grid or Dockerized Selenium (`selenium/standalone-chrome` containers) orchestrated via a Kubernetes agent pod.
-3. **Team Notifications on Failure:**
-   - Use the `post { failure { ... } }` pipeline block.
-   - Integrate the **Jenkins Slack Notification Plugin** or `emailext`:
-     ```groovy
-     post {
-         failure {
-             slackSend(channel: '#qa-automation-alerts',
-                       color: 'danger',
-                       message: "🚨 Build Failed: ${env.JOB_NAME} [Build #${env.BUILD_NUMBER}] - View Report: ${env.BUILD_URL}Extent_20Test_20Report/")
-         }
-     }
-     ```
+## 6. Assumptions
+
+1. Field labels on screen are close to the application guide. If they differ, only the page objects change.
+2. The address lookup shows a suggestion list (`role="option"` or a list) and the first suggestion is acceptable. The query is set by `employer.address.lookup`.
+3. Economic status and occupation are dropdowns. If the configured value isn't offered, the first real option is chosen and logged in the report.
+4. The invite email contains the verification code next to the word "code" (`inbox.code.regex`) and a link to the Employer portal.
+5. The upload summary shows counts in words such as "3 rows added / 2 rejected". Rejected rows show their email or row number plus a reason that names the field.
+6. API request and response field names match the model (`firstName`, `ppsn`, …). The endpoints, token path and id path are configurable.
+7. The API-created employee belongs to the employer of the employer admin used in the cross-check (`api.employer.id` can be sent if required).
 
 ---
 
-### 3. You are the only tester on the product. How would you split effort between UI, API and mobile testing?
-As a solo QA engineer, I adopt the **Test Automation Pyramid** to maximize ROI, test execution speed, and defect prevention:
-1. **API Automation (50% Effort):**
-   - Fast, resilient, and headless.
-   - Automate all business rules, authentication, validation schemas, error codes, and permission checks via REST Assured. API tests run on every pull request within seconds, preventing backend regression before UI integration.
-2. **Web UI Automation (30% Effort):**
-   - Focus exclusively on high-priority, end-to-end user journeys (Admin creates employer -> Employer adds employees -> Bulk upload).
-   - Do not automate every input permutation through the UI; leave negative edge validations to the API layer where possible to avoid flaky browser suites.
-3. **Mobile & Exploratory Testing (20% Effort):**
-   - Maintain a concise Appium smoke suite covering app launch, registration form, and onboarding walkthrough.
-   - Spend remaining time on manual exploratory testing, cross-browser visual checks, and edge cases (e.g. biometric authentication, network interruptions on mobile).
+## 7. Bugs / UX issues
+
+No application bugs can be reported yet, because the QA environment has not been exercised (see the disclosure above). Issues found and fixed in this framework during review:
+- **Assertions that could never fail.** API checks accepted 201 for "expect 401", and bulk counts were asserted as `>= 0`. All assertions are now strict.
+- **Invalid "valid" data.** Random PPSN check letters were almost always wrong, which would fail checksum validation. UK sort code and account number were used where the guide requires IBAN/BIC.
+- **Results lost in Jenkins.** The API and UI stages overwrote each other's report and Surefire XML, and test failures never produced an UNSTABLE build.
+- **Credentials and placeholder secrets committed** in CI files, runner scripts and code defaults. All removed; secrets now come only from the credentials store, environment variables or the gitignored file.
+- **XML suite error.** An unescaped `&` in `testng-validation.xml` (fixed earlier).
 
 ---
 
-### 4. How would you test payment reconciliation, where a bank file must match an employer's contribution payment?
-Payment reconciliation is a critical financial data-pipeline test:
-1. **Test Data Seeding:**
-   - Create a test employer and simulate payroll processing where an employer submits a contribution schedule (e.g. 10 employees, total contribution €5,450.00).
-   - Verify the database/API registers a pending payment obligation of exactly €5,450.00.
-2. **Bank File Fixture Generation:**
-   - Generate an automated ISO 20022 / CAMT.053 XML or pain.002 bank statement file containing transaction references, employer BIC/IBAN, transaction timestamp, and amount.
-3. **Execution & Reconciliation Trigger:**
-   - Upload the bank file via the Admin Portal reconciliation endpoint or place it into the ingestion SFTP bucket.
-   - Trigger the reconciliation batch processor via API/cron.
-4. **Assertions:**
-   - **Exact Match:** Verify contribution status transitions from `Pending` to `Reconciled` / `Paid`.
-   - **Underpayment Scenario:** Simulate bank file with €5,000.00 (€450 shortage); verify partial reconciliation status, alert generated for operations, and allocation rules applied correctly.
-   - **Overpayment / Duplicate Reference:** Verify system flags discrepancies, does not double-allocate funds, and logs an audit record for manual review.
+## 8. Answers to written questions
+
+**1. If a test fails in Jenkins, how do you find out whether the problem is the application or the test?**
+Start with the Extent report: the failure message, the screenshot and URL at the moment of failure, and the step that failed (each journey step is its own test). An assertion on application behaviour (wrong status code, missing row, an error banner in the screenshot) points to the application. A `TimeoutException` on a locator with the page looking correct points to the test (locator drift or timing). Then reproduce: rerun the single test headed against the same environment, and repeat the step by hand or through the API. If the API test for the same rule also fails, it's the application. If it passes manually and fails only in automation, fix the test.
+
+**2. How would you run the UI tests in parallel on Jenkins agents and alert the team on failure?**
+The driver is already `ThreadLocal`, and each test class gets its own browser, so TestNG `parallel="classes"` works for independent classes (the dependent journey stays in one class). Across agents: a declarative `parallel { }` block with one stage per browser (`-Dbrowser=chrome` / `edge`), or one per suite, each on a labelled agent or a Selenium Grid / Docker browser node. Alerting: `post { unstable/failure { … } }` already emails `NOTIFY_EMAIL`; Slack works the same way with `slackSend`, including the report link.
+
+**3. You are the only tester. How would you split effort between UI, API and mobile?**
+Roughly 50% API, 30% web UI, 20% mobile/exploratory. Business rules (PPSN, age, duplicates, auth) are cheapest and most stable to check at the API. UI automation covers the few end-to-end journeys that matter most (this one). Mobile gets a thin Appium smoke (launch, registration validation) plus exploratory sessions on real devices, because identity checks and app-store builds are hard to automate reliably.
+
+**4. How would you test payment reconciliation, where a bank file must match an employer's contribution payment?**
+Treat it as data-driven backend testing. Create a `QA-AUTO-` employer with a known contribution schedule, then generate bank files for each case: exact match, underpayment, overpayment, wrong or missing reference, duplicate file, and payment on the wrong date. Feed each through the same ingestion path production uses and assert the outcome per case: reconciled, partially paid with an exception raised, refund or hold, a duplicate rejected without double-allocating money, and an audit trail written. Also check amounts to the cent, currency, and that member-level allocations add up to the payment.
+
+**5. How would you handle flaky tests caused by slow emails or third-party identity checks?**
+Emails: never fixed sleeps. Poll the inbox with a timeout (this framework uses `FluentWait` over IMAP with a unique `+alias` per run, so stale emails can't match). Keep the email assertion in its own test step so a slow email doesn't hide other results. Long term, use a mail-catcher API or a test-only endpoint in QA. Third-party identity checks: stub them in QA (e.g. WireMock) with fixed "pass / fail / PEP match" personas, and keep a small number of contract tests against the real provider. Never use blanket retries, which hide real defects; use at most one retry, limited to known external steps and reported as such.
+
+**6. How would you manage test data so the QA environment does not fill up with junk?**
+Use a fixed prefix (`QA-AUTO-`) plus a run id on everything created, which this framework does. Clean up through the API at the end of a run where delete or archive endpoints exist, plus a scheduled job that removes `QA-AUTO-%` records older than 24-48 hours. Reuse long-lived reference data (one activated employer admin for API and Part C runs) instead of creating it every time. Agree a data-retention rule with the developers so cleanup never touches non-test data.
+
+**7. What would you add next with another week?**
+1. Run against the QA environment, tune the locators, and record a full green report plus Jenkins evidence.
+2. API cleanup of `QA-AUTO-` data after each run.
+3. Automate TC-05 (invalid IBAN) and TC-22 (bad upload file).
+4. Cross-browser parallel stage in Jenkins.
+5. The Appium registration smoke test.
+6. Response-time thresholds on the API tests.
 
 ---
 
-### 5. How would you handle flaky tests caused by slow emails or third-party identity checks?
-1. **Decouple from External Asynchronous Latency:**
-   - **Slow Verification Emails:** Do not wait on real external SMTP servers (e.g. Gmail). Use virtual testing inboxes with webhooks/REST APIs (e.g., Mailosaur, Mailtrap, or local Inbucket). Better yet, in lower QA environments, expose a test-only backend API endpoint (`/api/test/get-activation-token?email=...`) or read directly from Redis/database to bypass email delivery delays entirely.
-2. **Third-Party Identity Verification (KYC/PEP):**
-   - Live external identity providers are notoriously flaky, rate-limited, and slow.
-   - Mock the third-party provider using **WireMock** or service virtualization. Inject controlled mock responses for positive (verified), negative (failed verification), and edge (PEP match) personas.
-3. **Intelligent Polling & Polling Intervals:**
-   - Replace arbitrary `Thread.sleep()` with explicit polling using **Awaitility** or FluentWait:
-     ```java
-     Awaitility.await()
-         .atMost(30, TimeUnit.SECONDS)
-         .pollInterval(2, TimeUnit.SECONDS)
-         .until(() -> emailService.hasReceivedInvite(adminEmail));
-     ```
-4. **Automatic Rerun on Failure:**
-   - Use TestNG `IRetryAnalyzer` (configured for max 1 retry) for known asynchronous external flows to prevent false alarms on transient network hiccups.
+## 9. Submission checklist
 
----
-
-### 6. How would you manage test data so the QA environment does not fill up with junk?
-1. **Consistent Naming & Prefixes:**
-   - As implemented in this framework, prefix all created entities (companies, users, files) with `QA-AUTO-` and an ISO timestamp (`QA-AUTO-Corp-20261018...`).
-2. **Automated Teardown & Purge Hooks:**
-   - In automated suites, register `@AfterSuite` or `@AfterClass` teardown logic that calls administrative delete/archive REST APIs to clean up created entities immediately after execution.
-3. **Scheduled Nightly Database Cleanup:**
-   - Run a scheduled nightly cron job / SQL stored procedure in the QA database that hard-deletes or archives any records matching `WHERE company_name LIKE 'QA-AUTO-%' AND created_at < NOW() - INTERVAL '48 HOURS'`.
-4. **Ephemeral Testing Environments:**
-   - Move towards containerized test environments (Testcontainers / Docker Compose) where the database is spun up fresh from a clean migration snapshot for the test run and completely destroyed afterwards.
-
----
-
-### 7. What would you add next if you had another week?
-1. **Live Portal Selectors & SUT Mapping:**
-   - Update page object locators with real DOM IDs and data-testids from the live Irish Pension platform once QA access is granted.
-2. **Appium Mobile Automation Suite (Part F Bonus):**
-   - Implement an Appium test suite in `src/test/java/com/uplift/mobile/` covering the Employee mobile app onboarding journey (launch, registration, KYC document upload mock, pension plan selection).
-3. **Single Parameterized Runner for Part C:**
-   - Refactor the 6 separate validation test methods into a single unified `@Test(dataProvider = "employeeValidationScenarios")` test that reads scenario name, field payload, and expected error selector dynamically.
-4. **Full Virtualized Mail Service (Mailosaur / Mailtrap):**
-   - Replace the mock inbox stub in `EmailInboxHandler` with live REST Assured calls to retrieve verification tokens and activation links programmatically.
-5. **Dockerized Selenium Grid & GitHub Actions:**
-   - Add a `docker-compose.yml` for parallel Chrome/Firefox headless nodes, and wire the GitHub Actions CI workflow to run regression on every pull request.
-
----
-
-## 📸 Manual Evidence Checklist
-
-Before submitting your assignment, capture the following manual artifacts:
-
-- [ ] **ExtentReports HTML Report:** Open `reports/ExtentReport.html` in your browser. Verify the dashboard charts, execution timings, and screenshots are rendered cleanly.
-- [ ] **Jenkins Stage View Screenshot:** Capture a screenshot showing all 5 stages (`Checkout`, `Install`, `API tests`, `UI tests`, `Publish report`) in green.
-- [ ] **Jenkins Console Output Screenshot:** Capture a screenshot of the build console log showing the parameters and successful Maven execution.
-- [ ] **Jenkins Published Report View:** Capture a screenshot of the Jenkins build page showing the "Extent Test Report" link and the embedded dashboard.
-- [ ] **5-Minute Screen Recording with Voice-over:**
-  - Record your screen walking through the repository structure, POM design, Jenkins pipeline execution, and ExtentReport.
-  - Follow the 5-minute demo script provided in the review document.
-
----
-
-## 🏗️ Jenkins CI/CD Declarative Pipeline
-
-The framework's `Jenkinsfile` is structured as follows:
-
-```groovy
-pipeline {
-    agent any
-
-    triggers {
-        cron('H 2 * * *') // Nightly schedule between 2:00 AM and 2:59 AM
-    }
-
-    parameters {
-        choice(name: 'ENVIRONMENT', choices: ['QA', 'STAGING', 'DEV'], description: 'Target Execution Environment')
-        choice(name: 'BROWSER', choices: ['chrome', 'edge', 'firefox'], description: 'Browser for UI Automation Tests')
-        booleanParam(name: 'HEADLESS', defaultValue: true, description: 'Execute UI tests in Headless mode')
-    }
-
-    environment {
-        PROJECT_DIR = "${env.WORKSPACE}"
-        ADMIN_CREDS = credentials('qa-admin-credentials')
-        API_SECRET_TOKEN = credentials('qa-api-token')
-    }
-
-    stages {
-        stage('Checkout') {
-            steps { checkout scm }
-        }
-
-        stage('Install') {
-            steps {
-                script {
-                    if (isUnix()) {
-                        sh 'mvn clean compile test-compile -DskipTests=true'
-                    } else {
-                        bat 'mvn clean compile test-compile -DskipTests=true'
-                    }
-                }
-            }
-        }
-
-        stage('API tests') {
-            steps {
-                script {
-                    def mavenCmd = "mvn test -DsuiteXmlFile=src/test/resources/testng-api.xml -Dapi.auth.token=\"${API_SECRET_TOKEN}\""
-                    if (isUnix()) { sh mavenCmd } else { bat mavenCmd }
-                }
-            }
-        }
-
-        stage('UI tests') {
-            steps {
-                script {
-                    def mavenCmd = "mvn test -DsuiteXmlFile=src/test/resources/testng-smoke.xml -Dbrowser=${params.BROWSER} -Dheadless=${params.HEADLESS} -Dadmin.username=\"${ADMIN_CREDS_USR}\" -Dadmin.password=\"${ADMIN_CREDS_PSW}\""
-                    if (isUnix()) { sh mavenCmd } else { bat mavenCmd }
-                }
-            }
-        }
-
-        stage('Publish report') {
-            steps {
-                publishHTML([
-                    allowMissing: false,
-                    alwaysLinkToLastBuild: true,
-                    keepAll: true,
-                    reportDir: 'reports',
-                    reportFiles: 'ExtentReport.html',
-                    reportName: 'Extent Test Report',
-                    reportTitles: 'QA Automation Test Results'
-                ])
-            }
-        }
-    }
-
-    post {
-        always {
-            archiveArtifacts artifacts: 'reports/**, target/surefire-reports/**', allowEmptyArchive: true
-            junit testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true
-        }
-    }
-}
-```
+- [ ] QA run: `mvn clean test`, then attach `reports/ExtentReport.html`
+- [ ] Jenkins screenshots: stage view, console output, published report
+- [ ] Screen recording (up to 5 minutes) of the suite running in Jenkins
+- [ ] Bugs / UX issues found during the QA run added to section 7

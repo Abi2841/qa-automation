@@ -1,59 +1,76 @@
 package com.uplift.pages.admin;
 
+import com.uplift.config.ConfigReader;
 import com.uplift.models.EmployerAdminModel;
-import com.uplift.pages.BasePage;
-import com.uplift.utils.WaitUtils;
+import com.uplift.pages.PortalPage;
 import org.openqa.selenium.By;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
-
-import java.util.List;
 
 /**
- * Page Object representing an individual Employer profile page.
- * Manages Employer details and provisioning of Employer Admins.
+ * Page Object representing an individual Employer record and its admins section.
+ * Admin form fields per the application guide: name, email, mobile, economic status,
+ * occupation and the PEP (Politically Exposed Person) question.
  */
-public class EmployerDetailsPage extends BasePage {
+public class EmployerDetailsPage extends PortalPage {
 
-    // Top Level Locators
-    private final By employerHeading = By.cssSelector("h1, h2.employer-name, [data-testid='employer-title']");
-    private final By addAdminButton = By.cssSelector("button#add-admin, [data-testid='btn-add-admin'], .btn-add-admin");
-    private final By adminsTableRows = By.cssSelector("table#admins-table tbody tr, .admin-list-row");
-    private final By adminSuccessNotification = By.cssSelector(".toast-success, .alert-success, [role='status']");
+    private final By adminsSection = By.xpath("//*[self::a or self::button or @role='tab']"
+            + "[contains(translate(normalize-space(.),'ADMINS','admins'),'admins')]");
+    private final By addAdminButton = actionWithText("add", "admin");
 
-    // Add Admin Form / Modal Locators
-    private final By adminFirstNameInput = By.cssSelector("input#firstName, input[name='firstName']");
-    private final By adminLastNameInput = By.cssSelector("input#lastName, input[name='lastName']");
-    private final By adminEmailInput = By.cssSelector("input#email, input[name='email'], input[type='email']");
-    private final By adminPhoneInput = By.cssSelector("input#phone, input[name='phone'], input[name='phoneNumber']");
-    private final By saveAdminButton = By.cssSelector("button#save-admin, [data-testid='btn-save-admin'], button.btn-save");
+    // Add admin form
+    private final By firstNameInput = fieldByLabel("first name", "forename");
+    private final By lastNameInput = fieldByLabel("last name", "surname");
+    private final By fullNameInput = fieldByLabel("full name", "name");
+    private final By emailInput = fieldByLabel("email");
+    private final By mobileInput = fieldByLabel("mobile", "phone");
+    private final By economicStatusInput = fieldByLabel("economic status");
+    private final By occupationInput = fieldByLabel("occupation");
+    private final By saveAdminButton = By.xpath("//*[@role='dialog' or self::form]//button[@type='submit']"
+            + " | //button[contains(translate(normalize-space(.),'SAVEINVTD','saveinvtd'),'save')"
+            + " or contains(translate(normalize-space(.),'SAVEINVTD','saveinvtd'),'invite')"
+            + " or translate(normalize-space(.),'ADD','add')='add']");
 
     public EmployerDetailsPage(WebDriver driver) {
         super(driver);
     }
 
-    public String getEmployerHeading() {
-        return getText(employerHeading);
+    /**
+     * Opens the admins section (a tab or link); no-op when it is already shown on the page.
+     */
+    public void openAdminsSection() {
+        if (isDisplayed(adminsSection, ConfigReader.getShortWait())) {
+            click(adminsSection);
+        }
     }
 
     public void clickAddAdmin() {
         click(addAdminButton);
     }
 
-    public void enterAdminFirstName(String firstName) {
-        sendKeys(adminFirstNameInput, firstName);
+    /**
+     * Fills the admin form. Supports both "first name + last name" and a single "name" field.
+     */
+    public void fillAdminForm(EmployerAdminModel admin) {
+        if (isDisplayed(firstNameInput, ConfigReader.getShortWait())) {
+            setField(firstNameInput, admin.getFirstName());
+            setField(lastNameInput, admin.getLastName());
+        } else {
+            setField(fullNameInput, admin.getFullName());
+        }
+        setField(emailInput, admin.getEmail());
+        setField(mobileInput, admin.getMobileNumber());
+        setDropdown(economicStatusInput, admin.getEconomicStatus(), true);
+        setDropdown(occupationInput, admin.getOccupation(), true);
+        answerPepQuestion(admin.getPepAnswer());
     }
 
-    public void enterAdminLastName(String lastName) {
-        sendKeys(adminLastNameInput, lastName);
-    }
-
-    public void enterAdminEmail(String email) {
-        sendKeys(adminEmailInput, email);
-    }
-
-    public void enterAdminPhone(String phone) {
-        sendKeys(adminPhoneInput, phone);
+    private void answerPepQuestion(String answer) {
+        try {
+            answerQuestion("politically exposed", answer);
+        } catch (TimeoutException e) {
+            answerQuestion("pep", answer);
+        }
     }
 
     public void clickSaveAdmin() {
@@ -61,33 +78,20 @@ public class EmployerDetailsPage extends BasePage {
     }
 
     /**
-     * Complete workflow to provision an Employer Admin for this company.
+     * Complete workflow to add an Employer Admin for this employer.
      */
-    public EmployerDetailsPage addEmployerAdmin(EmployerAdminModel admin) {
+    public void addEmployerAdmin(EmployerAdminModel admin) {
+        openAdminsSection();
         clickAddAdmin();
-        enterAdminFirstName(admin.getFirstName());
-        enterAdminLastName(admin.getLastName());
-        enterAdminEmail(admin.getEmail());
-        enterAdminPhone(admin.getPhoneNumber());
+        fillAdminForm(admin);
         clickSaveAdmin();
-        return this;
     }
 
     /**
-     * Verifies that the created Employer Admin appears in the employer's admin roster.
+     * Verifies that the Employer Admin appears in the employer's admin list.
      */
-    public boolean isAdminListed(String emailOrName) {
-        WaitUtils.waitForPresence(driver, adminsTableRows, 15);
-        List<WebElement> rows = driver.findElements(adminsTableRows);
-        for (WebElement row : rows) {
-            if (row.getText().contains(emailOrName)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public boolean isSuccessNotificationDisplayed() {
-        return isDisplayed(adminSuccessNotification);
+    public boolean isAdminListed(String email) {
+        return isDisplayed(rowContaining(email), ConfigReader.getExplicitWait())
+                || pageContains(email, 1);
     }
 }

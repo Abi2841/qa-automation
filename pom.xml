@@ -11,7 +11,7 @@
     <packaging>jar</packaging>
 
     <name>QA Automation Framework</name>
-    <description>Maven-based Test Automation Framework skeleton using Selenium WebDriver, TestNG, REST Assured, and ExtentReports</description>
+    <description>Maven-based Test Automation Framework using Selenium WebDriver, TestNG, REST Assured, and ExtentReports</description>
 
     <properties>
         <maven.compiler.release>17</maven.compiler.release>
@@ -25,13 +25,16 @@
         <extentreports.version>5.1.2</extentreports.version>
         <jackson.version>2.18.2</jackson.version>
         <slf4j.version>2.0.16</slf4j.version>
+        <angus-mail.version>2.0.3</angus-mail.version>
 
         <!-- Plugin Versions -->
         <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.5.2</maven-surefire-plugin.version>
 
-        <!-- Default TestNG Suite -->
-        <suiteXmlFile>src/test/resources/testng-smoke.xml</suiteXmlFile>
+        <!-- Default TestNG Suite: full run (UI journey + data-driven checks + API) -->
+        <suiteXmlFile>src/test/resources/testng-regression.xml</suiteXmlFile>
+        <!-- Overridable so CI stages do not overwrite each other's results -->
+        <surefire.reports.dir>${project.build.directory}/surefire-reports</surefire.reports.dir>
     </properties>
 
     <dependencies>
@@ -56,6 +59,13 @@
             <version>${rest-assured.version}</version>
         </dependency>
 
+        <!-- JSON Schema validation of API responses -->
+        <dependency>
+            <groupId>io.rest-assured</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <version>${rest-assured.version}</version>
+        </dependency>
+
         <!-- ExtentReports for Rich HTML Reporting -->
         <dependency>
             <groupId>com.aventstack</groupId>
@@ -68,6 +78,13 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>${jackson.version}</version>
+        </dependency>
+
+        <!-- Jakarta Mail (IMAP) to read invite emails from the test inbox -->
+        <dependency>
+            <groupId>org.eclipse.angus</groupId>
+            <artifactId>angus-mail</artifactId>
+            <version>${angus-mail.version}</version>
         </dependency>
 
         <!-- SLF4J Simple Logger Provider -->
@@ -100,6 +117,7 @@
                     <suiteXmlFiles>
                         <suiteXmlFile>${suiteXmlFile}</suiteXmlFile>
                     </suiteXmlFiles>
+                    <reportsDirectory>${surefire.reports.dir}</reportsDirectory>
                 </configuration>
             </plugin>
         </plugins>

@@ -2,6 +2,7 @@ package com.uplift.tests.ui;
 
 import com.uplift.base.BaseTest;
 import com.uplift.config.ConfigReader;
+import com.uplift.data.JourneyContext;
 import com.uplift.models.EmployerAdminModel;
 import com.uplift.models.EmployerModel;
 import com.uplift.pages.admin.AdminDashboardPage;
@@ -9,72 +10,89 @@ import com.uplift.pages.admin.AdminLoginPage;
 import com.uplift.pages.admin.CreateEmployerPage;
 import com.uplift.pages.admin.EmployerDetailsPage;
 import com.uplift.pages.admin.EmployersPage;
+import com.uplift.reporting.ReportLogger;
 import org.testng.Assert;
-import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
+import java.time.Instant;
+
 /**
- * End-to-end automation journey for the Super Admin Portal:
- * 1. Admin login with secure credentials
- * 2. Navigate to Employers & open creation form
- * 3. Generate dynamic test data prefixed with 'QA-AUTO-'
- * 4. Populate company details, CRN, address, payroll date, and bank details
- * 5. Save and assert success notification & listing presence
- * 6. Open the created employer & provision an Employer Admin
- * 7. Assert Employer Admin presence in the company admin roster
+ * Part B, Admin portal (application guide Steps 1-2):
+ * 1. Log in to the Admin portal
+ * 2. Create a new employer with unique QA-AUTO- data (name, CRN, address lookup, payroll date, IBAN/BIC)
+ * 3. Add an employer admin (name, email, mobile, economic status, occupation, PEP) to that employer
+ *
+ * Each step is its own @Test so the report shows exactly where the journey stopped; later steps
+ * depend on earlier ones and are skipped (not failed) when a prerequisite fails.
+ * The created employer and admin are stored in JourneyContext for EmployerPortalJourneyTest.
  */
 public class AdminPortalJourneyTest extends BaseTest {
 
-    private String adminUrl;
-    private String adminUsername;
-    private String adminPassword;
+    public static final String GROUP = "admin-portal-journey";
 
-    @BeforeMethod
-    public void setupAdminCredentials() {
-        adminUrl = ConfigReader.getAdminPortalUrl();
-        adminUsername = ConfigReader.getAdminUsername();
-        adminPassword = ConfigReader.getAdminPassword();
+    private AdminDashboardPage dashboardPage;
+
+    @Test(groups = GROUP, priority = 1,
+            description = "B1: Admin logs in to the Admin portal and lands on the dashboard")
+    public void adminLogsIn() {
+        AdminLoginPage loginPage = new AdminLoginPage(driver).open(ConfigReader.getAdminPortalUrl());
+        dashboardPage = loginPage.loginAs(ConfigReader.getAdminUsername(), ConfigReader.getAdminPassword());
+
+        Assert.assertTrue(dashboardPage.isDashboardLoaded(),
+                "Admin dashboard (Employers menu) should be shown after login. Current URL: " + driver.getCurrentUrl());
     }
 
-    @Test(description = "Admin Journey: Onboard a new Employer and provision an Employer Admin")
-    public void testAdminCreatesEmployerAndEmployerAdmin() {
-        // Step 1: Navigate to Admin Portal and Log in
-        driver.get(adminUrl);
-        AdminLoginPage loginPage = new AdminLoginPage(driver);
+    @Test(groups = GROUP, priority = 2, dependsOnMethods = "adminLogsIn",
+            description = "B2: Admin creates an employer; success message shown and employer listed with its status")
+    public void adminCreatesEmployer() {
+        EmployerModel employer = EmployerModel.generateRandomEmployer();
+        Assert.assertTrue(employer.getCompanyName().startsWith(ConfigReader.getTestDataPrefix()),
+                "Employer name must carry the QA-AUTO- prefix");
+        ReportLogger.info("Employer data: " + employer);
 
-        // Verify login page is reachable
-        Assert.assertNotNull(driver.getTitle(), "Admin portal page title should be readable");
+        CreateEmployerPage createPage = dashboardPage.navigateToEmployers().clickAddEmployer();
+        createPage.createEmployer(employer);
 
-        AdminDashboardPage dashboardPage = loginPage.loginAs(adminUsername, adminPassword);
+        String successMessage = createPage.waitForSuccessMessage(ConfigReader.getExplicitWait());
+        Assert.assertNotNull(successMessage, "A success message should be shown after saving the employer");
+        ReportLogger.info("Success message: " + successMessage);
 
-        // Step 2: Navigate to Employers section
         EmployersPage employersPage = dashboardPage.navigateToEmployers();
+        String row = employersPage.getEmployerRowText(employer.getCompanyName());
+        Assert.assertNotNull(row, "Employer should appear in the employer list: " + employer.getCompanyName());
+        ReportLogger.info("Employer list row: " + row);
 
-        // Step 3: Generate unique dynamic Employer test data with QA-AUTO- prefix
-        EmployerModel employerData = EmployerModel.generateRandomEmployer();
-        Assert.assertTrue(employerData.getCompanyName().startsWith("QA-AUTO-"),
-                "Employer name must be prefixed with QA-AUTO-");
+        String expectedStatus = ConfigReader.getProperty("employer.expected.status");
+        if (expectedStatus != null) {
+            Assert.assertTrue(row.toLowerCase().contains(expectedStatus.toLowerCase()),
+                    "Employer row should show status '" + expectedStatus + "' but was: " + row);
+        } else {
+            Assert.assertTrue(row.replace(employer.getCompanyName(), "").trim().length() > 0,
+                    "Employer row should show more than the name (e.g. its status): " + row);
+        }
+        JourneyContext.setEmployer(employer);
+    }
 
-        // Step 4: Open form and enter Company Details, CRN, Address, Payroll Date, Bank Details
-        CreateEmployerPage createPage = employersPage.clickCreateEmployer();
-        createPage.createEmployer(employerData);
+    @Test(groups = GROUP, priority = 3, dependsOnMethods = "adminCreatesEmployer",
+            description = "B3: Admin adds an employer admin to the new employer; admin is listed")
+    public void adminAddsEmployerAdmin() {
+        EmployerModel employer = JourneyContext.getEmployer();
+        EmployerAdminModel admin = EmployerAdminModel.generateRandomEmployerAdmin();
+        Assert.assertTrue(admin.getFirstName().startsWith(ConfigReader.getTestDataPrefix()),
+                "Employer admin name must carry the QA-AUTO- prefix");
+        ReportLogger.info("Employer admin: " + admin.getFullName() + " <" + admin.getEmail() + ">, mobile "
+                + admin.getMobileNumber() + ", economic status " + admin.getEconomicStatus()
+                + ", occupation " + admin.getOccupation() + ", PEP " + admin.getPepAnswer());
 
-        // Step 5: Save and verify success notification & listing presence
-        boolean isListed = employersPage.isEmployerListed(employerData.getCompanyName());
-        Assert.assertTrue(isListed, "Newly created employer should be displayed in the Employers table: " 
-                + employerData.getCompanyName());
+        EmployerDetailsPage detailsPage = dashboardPage.navigateToEmployers().openEmployer(employer.getCompanyName());
+        // Recorded before saving: the invite email for this admin must arrive after this moment
+        JourneyContext.setEmployerAdmin(admin);
+        JourneyContext.setAdminInviteSentAt(Instant.now());
+        detailsPage.addEmployerAdmin(admin);
 
-        // Step 6: Open the created Employer and provision an Employer Admin
-        EmployerDetailsPage detailsPage = employersPage.openEmployer(employerData.getCompanyName());
-        EmployerAdminModel adminData = EmployerAdminModel.generateRandomEmployerAdmin();
-        Assert.assertTrue(adminData.getFirstName().startsWith("QA-AUTO-"),
-                "Employer Admin first name must be prefixed with QA-AUTO-");
-
-        detailsPage.addEmployerAdmin(adminData);
-
-        // Step 7: Verify Employer Admin is listed in the roster
-        boolean isAdminListed = detailsPage.isAdminListed(adminData.getEmail());
-        Assert.assertTrue(isAdminListed, "Employer Admin should appear in the admin roster: " 
-                + adminData.getEmail());
+        String successMessage = detailsPage.waitForSuccessMessage(ConfigReader.getExplicitWait());
+        ReportLogger.info("Success message: " + successMessage);
+        Assert.assertTrue(detailsPage.isAdminListed(admin.getEmail()),
+                "Employer admin should be listed for the employer: " + admin.getEmail());
     }
 }

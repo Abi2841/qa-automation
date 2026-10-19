@@ -1,64 +1,69 @@
 package com.uplift.pages.admin;
 
+import com.uplift.config.ConfigReader;
 import com.uplift.models.EmployerModel;
-import com.uplift.pages.BasePage;
+import com.uplift.pages.PortalPage;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 
 /**
- * Page Object representing the Employer Creation form.
- * Handles input of Company Details, CRN, Address, Payroll Date, and Bank Details.
+ * Page Object representing the "Add employer" form.
+ * Sections per the application guide: company details (name, CRN, address with lookup),
+ * payroll date and bank details (IBAN, BIC).
  */
-public class CreateEmployerPage extends BasePage {
+public class CreateEmployerPage extends PortalPage {
 
-    // 1. Company Information Locators
-    private final By companyNameInput = By.cssSelector("input#companyName, input[name='companyName'], input[name='name']");
-    private final By crnInput = By.cssSelector("input#crn, input[name='crn'], input[name='registrationNumber']");
+    // Company details
+    private final By companyNameInput = fieldByLabel("company name", "employer name", "legal name");
+    private final By crnInput = fieldByLabel("crn", "registration number", "company number");
 
-    // 2. Address Locators
-    private final By addressLine1Input = By.cssSelector("input#addressLine1, input[name='addressLine1'], input[name='address']");
-    private final By cityInput = By.cssSelector("input#city, input[name='city']");
-    private final By postalCodeInput = By.cssSelector("input#postalCode, input[name='postalCode'], input[name='zipCode']");
-    private final By countryInput = By.cssSelector("input#country, select#country, input[name='country']");
+    // Address lookup: type a query, then pick the first suggestion
+    private final By addressLookupInput = fieldByLabel("address lookup", "search address", "find address", "address", "eircode");
+    private final By addressSuggestion = By.cssSelector(
+            "[role='option'], [role='listbox'] li, .pac-item, [class*='suggestion'] li, [class*='suggestion-item'], [class*='autocomplete'] li");
 
-    // 3. Payroll Schedule Locators
-    private final By payrollDateInput = By.cssSelector("input#payrollDate, select#payrollDate, input[name='payrollDate']");
+    // Payroll and bank details
+    private final By payrollDateInput = fieldByLabel("payroll date", "payroll day", "payroll");
+    private final By ibanInput = fieldByLabel("iban");
+    private final By bicInput = fieldByLabel("bic", "swift");
 
-    // 4. Banking Information Locators
-    private final By bankNameInput = By.cssSelector("input#bankName, input[name='bankName']");
-    private final By accountNumberInput = By.cssSelector("input#accountNumber, input[name='accountNumber']");
-    private final By sortCodeInput = By.cssSelector("input#sortCode, input[name='sortCode']");
-
-    // Actions
-    private final By saveButton = By.cssSelector("button[type='submit'], button#save-employer, [data-testid='btn-save'], .btn-primary");
-    private final By cancelButton = By.cssSelector("button#cancel, .btn-secondary");
+    private final By saveButton = By.xpath("//form//button[@type='submit'] | " + actionWithTextXpath());
 
     public CreateEmployerPage(WebDriver driver) {
         super(driver);
     }
 
+    private static String actionWithTextXpath() {
+        return "//button[contains(translate(normalize-space(.),'SAVECRT','savecrt'),'save')"
+                + " or contains(translate(normalize-space(.),'SAVECRT','savecrt'),'create')]";
+    }
+
     public void enterCompanyName(String companyName) {
-        sendKeys(companyNameInput, companyName);
+        setField(companyNameInput, companyName);
     }
 
     public void enterCRN(String crn) {
-        sendKeys(crnInput, crn);
+        setField(crnInput, crn);
     }
 
-    public void enterAddress(String address, String city, String postalCode) {
-        sendKeys(addressLine1Input, address);
-        sendKeys(cityInput, city);
-        sendKeys(postalCodeInput, postalCode);
+    /**
+     * Uses the address lookup: types the query and selects the first suggestion offered.
+     */
+    public void selectAddress(String lookupQuery) {
+        setField(addressLookupInput, lookupQuery);
+        if (!isDisplayed(addressSuggestion, ConfigReader.getExplicitWait())) {
+            throw new IllegalStateException("Address lookup offered no suggestions for '" + lookupQuery + "'");
+        }
+        click(addressSuggestion);
     }
 
-    public void enterPayrollDate(String payrollDate) {
-        sendKeys(payrollDateInput, payrollDate);
+    public void enterPayrollDate(String payrollDay) {
+        setDropdown(payrollDateInput, payrollDay, false);
     }
 
-    public void enterBankDetails(String bankName, String accountNumber, String sortCode) {
-        sendKeys(bankNameInput, bankName);
-        sendKeys(accountNumberInput, accountNumber);
-        sendKeys(sortCodeInput, sortCode);
+    public void enterBankDetails(String iban, String bic) {
+        setField(ibanInput, iban);
+        setField(bicInput, bic);
     }
 
     public void clickSave() {
@@ -66,15 +71,14 @@ public class CreateEmployerPage extends BasePage {
     }
 
     /**
-     * Complete workflow to populate all employer sections and submit.
+     * Complete workflow to populate all employer sections and save.
      */
-    public EmployersPage createEmployer(EmployerModel employer) {
+    public void createEmployer(EmployerModel employer) {
         enterCompanyName(employer.getCompanyName());
         enterCRN(employer.getCompanyRegistrationNumber());
-        enterAddress(employer.getAddressLine1(), employer.getCity(), employer.getPostalCode());
-        enterPayrollDate(employer.getPayrollDate());
-        enterBankDetails(employer.getBankName(), employer.getAccountNumber(), employer.getSortCode());
+        selectAddress(employer.getAddressLookupQuery());
+        enterPayrollDate(employer.getPayrollDay());
+        enterBankDetails(employer.getIban(), employer.getBic());
         clickSave();
-        return new EmployersPage(driver);
     }
 }

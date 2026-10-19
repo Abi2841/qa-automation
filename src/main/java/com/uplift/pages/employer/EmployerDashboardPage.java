@@ -1,41 +1,39 @@
 package com.uplift.pages.employer;
 
-import com.uplift.pages.BasePage;
-import org.openqa.selenium.By;
+import com.uplift.config.ConfigReader;
+import com.uplift.pages.PortalPage;
 import org.openqa.selenium.WebDriver;
 
 /**
  * Page Object representing the Employer Portal Dashboard.
  * Allows verification that the dashboard belongs to the expected employer organization.
  */
-public class EmployerDashboardPage extends BasePage {
-
-    // Selectors
-    private final By employerNameBadge = By.cssSelector(".company-name, .employer-brand, [data-testid='company-badge'], h2.org-name");
-    private final By employeesNavMenu = By.cssSelector("a[href*='employee'], [data-testid='nav-employees'], nav a");
-    private final By userProfileMenu = By.cssSelector(".user-menu, .profile-dropdown, [data-testid='user-profile']");
-    private final By logoutButton = By.cssSelector("a[href*='logout'], [data-testid='logout-btn'], button.logout");
+public class EmployerDashboardPage extends PortalPage {
 
     public EmployerDashboardPage(WebDriver driver) {
         super(driver);
     }
 
     /**
-     * Retrieves the company name shown on the employer dashboard header.
+     * The dashboard is considered loaded once the "Employees" menu item is visible.
      */
-    public String getEmployerCompanyName() {
-        return getText(employerNameBadge);
-    }
-
-    public boolean isEmployerNameDisplayed() {
-        return isDisplayed(employerNameBadge);
+    public boolean isDashboardLoaded() {
+        return isDisplayed(navItemExactly("Employees"), ConfigReader.getExplicitWait())
+                || isDisplayed(actionWithText("Employees"), 1);
     }
 
     /**
-     * Navigates to the Employees management directory.
+     * True when the page shows the given employer's name (dashboard scoped to that employer).
+     */
+    public boolean isDashboardForEmployer(String companyName) {
+        return pageContains(companyName, ConfigReader.getExplicitWait());
+    }
+
+    /**
+     * Navigates to the Employees directory.
      */
     public EmployeesPage navigateToEmployees() {
-        click(employeesNavMenu);
+        navigateTo("Employees");
         return new EmployeesPage(driver);
     }
 
@@ -43,10 +41,7 @@ public class EmployerDashboardPage extends BasePage {
      * Logs out of the Employer Portal and returns to EmployerLoginPage.
      */
     public EmployerLoginPage clickLogout() {
-        if (isDisplayed(userProfileMenu)) {
-            click(userProfileMenu);
-        }
-        click(logoutButton);
+        logout();
         return new EmployerLoginPage(driver);
     }
 }

@@ -3,140 +3,109 @@ package com.uplift.tests.ui;
 import com.uplift.base.BaseTest;
 import com.uplift.config.ConfigReader;
 import com.uplift.data.EmployeeValidationDataProvider;
+import com.uplift.data.JourneyContext;
 import com.uplift.models.EmployeeModel;
 import com.uplift.pages.employer.AddEmployeePage;
 import com.uplift.pages.employer.EmployerDashboardPage;
 import com.uplift.pages.employer.EmployerLoginPage;
-import com.uplift.pages.employer.EmployeesPage;
+import com.uplift.reporting.ReportLogger;
 import org.testng.Assert;
-import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
 
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+
 /**
- * Part C: Data-driven negative and boundary validation suite for the Add Employee form.
+ * Part C: ONE data-driven test covering the Add employee form validations:
+ * mandatory fields empty, invalid email, invalid Irish PPSN, invalid mobile,
+ * duplicate employee (same PPSN or email) and date of birth under 18.
  *
- * Covers:
- * 1. Mandatory fields left empty
- * 2. Invalid email format
- * 3. Invalid Irish PPSN
- * 4. Invalid mobile number
- * 5. Duplicate employee using the same PPSN or email
- * 6. Date of birth that makes the employee under 18
+ * Every scenario starts from a fresh valid employee and breaks exactly one rule (see the JSON data file),
+ * then asserts that the submit is blocked with a validation message.
  */
 public class EmployeeValidationTest extends BaseTest {
 
-    private String employerPortalUrl;
-    private String employerAdminEmail;
-    private String employerAdminPassword;
+    private EmployerDashboardPage dashboardPage;
+    private EmployeeModel seedEmployee;
 
-    @BeforeMethod
-    public void setupCredentials() {
-        employerPortalUrl = ConfigReader.getEmployerPortalUrl();
-        employerAdminEmail = ConfigReader.getProperty("employer.admin.username", "qa-auto-admin@testcompany.com");
-        employerAdminPassword = ConfigReader.getSecret("employer.admin.password", "EmployerAdminSecretPassword123!");
+    /**
+     * Logs in once as the employer admin (the one created by the journey in this run, or the configured one)
+     * and creates the existing employee that the duplicate scenarios collide with.
+     */
+    @BeforeClass(alwaysRun = true)
+    public void loginAndCreateSeedEmployee() {
+        EmployerLoginPage loginPage = new EmployerLoginPage(driver).open(ConfigReader.getEmployerPortalUrl());
+        dashboardPage = loginPage.loginAs(JourneyContext.employerAdminEmail(), JourneyContext.employerAdminPassword());
+        Assert.assertTrue(dashboardPage.isDashboardLoaded(), "Employer dashboard should load for the validation suite");
+
+        seedEmployee = EmployeeModel.generateRandomEmployee();
+        AddEmployeePage addPage = dashboardPage.navigateToEmployees().clickAddEmployee();
+        addPage.addEmployee(seedEmployee);
+        Assert.assertTrue(dashboardPage.navigateToEmployees().isEmployeeListed(seedEmployee.getEmail()),
+                "Seed employee for the duplicate scenarios should be created: " + seedEmployee.getEmail());
     }
 
-    private AddEmployeePage navigateToAddEmployeeForm() {
-        driver.get(employerPortalUrl);
-        EmployerLoginPage loginPage = new EmployerLoginPage(driver);
-        EmployerDashboardPage dashboardPage = loginPage.loginAs(employerAdminEmail, employerAdminPassword);
-        EmployeesPage employeesPage = dashboardPage.navigateToEmployees();
-        return employeesPage.clickAddEmployee();
-    }
-
-    @Test(description = "1. Verify submission fails when all mandatory fields are left empty")
-    public void testMandatoryFieldsEmptyValidation() {
-        AddEmployeePage addPage = navigateToAddEmployeeForm();
-
-        // Submit blank form without filling required fields
-        addPage.submitExpectingValidationFailure();
-
-        // Assert validation behavior: form blocked and error state indicated
-        Assert.assertTrue(addPage.hasValidationErrors(),
-                "Form submission should be blocked when mandatory fields are empty");
-        Assert.assertTrue(driver.getCurrentUrl().contains("employee") || driver.getTitle() != null,
-                "User should remain on Add Employee view on validation failure");
-    }
-
-    @Test(dataProvider = "invalidEmailProvider", dataProviderClass = EmployeeValidationDataProvider.class,
-          description = "2. Verify validation fails for invalid email syntax")
-    public void testInvalidEmailFormatValidation(String invalidEmail, String scenarioDescription) {
-        AddEmployeePage addPage = navigateToAddEmployeeForm();
-
+    @Test(dataProvider = "addEmployeeValidationScenarios", dataProviderClass = EmployeeValidationDataProvider.class,
+            description = "C: Add employee form rejects invalid data (data-driven from employee-validation-scenarios.json)")
+    public void addEmployeeRejectsInvalidData(String scenarioId, String description,
+                                              Map<String, String> overrides, String expectedMessageContains) {
         EmployeeModel employee = EmployeeModel.generateRandomEmployee();
-        employee.setEmail(invalidEmail);
+        overrides.forEach((field, value) -> applyOverride(employee, field, resolve(value)));
+        ReportLogger.info(scenarioId + " data: " + employee);
 
+        AddEmployeePage addPage = dashboardPage.navigateToEmployees().clickAddEmployee();
         addPage.fillEmployeeForm(employee);
-        addPage.submitExpectingValidationFailure();
+        addPage.clickSave();
 
-        Assert.assertTrue(addPage.hasValidationErrors(),
-                "Validation error should appear for scenario [" + scenarioDescription + "] with email: " + invalidEmail);
+        List<String> messages = addPage.getValidationMessages(ConfigReader.getExplicitWait());
+        ReportLogger.info(scenarioId + " validation messages: " + messages);
+        Assert.assertFalse(messages.isEmpty(), scenarioId + " (" + description + "): a validation message should be shown");
+        Assert.assertTrue(addPage.isFormStillDisplayed(),
+                scenarioId + " (" + description + "): the form should stay open because the employee must not be saved");
+        if (expectedMessageContains != null) {
+            Assert.assertTrue(messages.stream().anyMatch(m -> m.toLowerCase().contains(expectedMessageContains.toLowerCase())),
+                    scenarioId + ": expected a message containing '" + expectedMessageContains + "' but got " + messages);
+        }
     }
 
-    @Test(dataProvider = "invalidPpsnProvider", dataProviderClass = EmployeeValidationDataProvider.class,
-          description = "3. Verify validation fails for invalid Irish PPSN formats")
-    public void testInvalidIrishPpsnValidation(String invalidPpsn, String scenarioDescription) {
-        AddEmployeePage addPage = navigateToAddEmployeeForm();
-
-        EmployeeModel employee = EmployeeModel.generateRandomEmployee();
-        employee.setPpsn(invalidPpsn);
-
-        addPage.fillEmployeeForm(employee);
-        addPage.submitExpectingValidationFailure();
-
-        Assert.assertTrue(addPage.hasValidationErrors(),
-                "Validation error should trigger for scenario [" + scenarioDescription + "] with PPSN: " + invalidPpsn);
+    /**
+     * Resolves the dynamic tokens used in the JSON data file.
+     */
+    private String resolve(String value) {
+        if (value.equals("{{seed.email}}")) {
+            return seedEmployee.getEmail();
+        }
+        if (value.equals("{{seed.ppsn}}")) {
+            return seedEmployee.getPpsn();
+        }
+        if (value.startsWith("{{dob.age:")) {
+            return LocalDate.now().minusYears(tokenNumber(value)).toString();
+        }
+        if (value.startsWith("{{dob.days.until.18:")) {
+            return LocalDate.now().plusDays(tokenNumber(value)).minusYears(18).toString();
+        }
+        return value;
     }
 
-    @Test(dataProvider = "invalidMobileProvider", dataProviderClass = EmployeeValidationDataProvider.class,
-          description = "4. Verify validation fails for invalid Irish mobile numbers")
-    public void testInvalidMobileValidation(String invalidMobile, String scenarioDescription) {
-        AddEmployeePage addPage = navigateToAddEmployeeForm();
-
-        EmployeeModel employee = EmployeeModel.generateRandomEmployee();
-        employee.setMobileNumber(invalidMobile);
-
-        addPage.fillEmployeeForm(employee);
-        addPage.submitExpectingValidationFailure();
-
-        Assert.assertTrue(addPage.hasValidationErrors(),
-                "Validation error should trigger for scenario [" + scenarioDescription + "] with mobile: " + invalidMobile);
+    /**
+     * Number after the colon in a token such as {{dob.age:16}}.
+     */
+    private static int tokenNumber(String token) {
+        return Integer.parseInt(token.substring(token.lastIndexOf(':') + 1, token.length() - 2));
     }
 
-    @Test(dataProvider = "under18DobProvider", dataProviderClass = EmployeeValidationDataProvider.class,
-          description = "6. Verify validation rejects employees under 18 years of age")
-    public void testUnder18DateOfBirthValidation(String under18Dob, int age, String scenarioDescription) {
-        AddEmployeePage addPage = navigateToAddEmployeeForm();
-
-        EmployeeModel employee = EmployeeModel.generateRandomEmployee();
-        employee.setDateOfBirth(under18Dob);
-
-        addPage.fillEmployeeForm(employee);
-        addPage.submitExpectingValidationFailure();
-
-        Assert.assertTrue(addPage.hasValidationErrors(),
-                "System must reject employee who is under 18 (age: " + age + ", DOB: " + under18Dob + ")");
-    }
-
-    @Test(description = "5. Verify system rejects creating a duplicate employee with the same PPSN or Email")
-    public void testDuplicateEmployeePpsnOrEmailValidation() {
-        AddEmployeePage addPage = navigateToAddEmployeeForm();
-
-        // Step 1: Create initial valid employee
-        EmployeeModel existingEmployee = EmployeeModel.generateRandomEmployee();
-        EmployeesPage employeesPage = addPage.addEmployee(existingEmployee);
-
-        // Step 2: Attempt to onboard a second employee reusing the exact same PPSN and Email
-        AddEmployeePage secondAddPage = employeesPage.clickAddEmployee();
-        EmployeeModel duplicateEmployee = EmployeeModel.generateRandomEmployee();
-        duplicateEmployee.setPpsn(existingEmployee.getPpsn());
-        duplicateEmployee.setEmail(existingEmployee.getEmail());
-
-        secondAddPage.fillEmployeeForm(duplicateEmployee);
-        secondAddPage.submitExpectingValidationFailure();
-
-        Assert.assertTrue(secondAddPage.hasValidationErrors(),
-                "System must reject second employee with duplicate PPSN (" + existingEmployee.getPpsn()
-                        + ") or duplicate Email (" + existingEmployee.getEmail() + ")");
+    private static void applyOverride(EmployeeModel employee, String field, String value) {
+        switch (field) {
+            case "firstName": employee.setFirstName(value); break;
+            case "lastName": employee.setLastName(value); break;
+            case "email": employee.setEmail(value); break;
+            case "mobileNumber": employee.setMobileNumber(value); break;
+            case "dateOfBirth": employee.setDateOfBirth(value); break;
+            case "ppsn": employee.setPpsn(value); break;
+            case "startDate": employee.setStartDate(value); break;
+            default: throw new IllegalArgumentException("Unknown employee field in test data: " + field);
+        }
     }
 }

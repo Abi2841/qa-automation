@@ -1,38 +1,30 @@
 package com.uplift.base;
 
-import com.uplift.config.ConfigReader;
 import com.uplift.reporting.ExtentTestListener;
 import org.openqa.selenium.WebDriver;
-import org.testng.annotations.AfterMethod;
-import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Listeners;
 
 /**
  * Base test class for UI automation test cases.
- * Handles WebDriver lifecycle per test method.
+ * One browser per test class: journey steps are separate @Test methods that share the
+ * logged-in session, and the browser stays open until @AfterClass so the listener can
+ * always capture a failure screenshot.
  */
 @Listeners(ExtentTestListener.class)
 public abstract class BaseTest {
 
     protected WebDriver driver;
 
-    @BeforeMethod(alwaysRun = true)
+    @BeforeClass(alwaysRun = true)
     public void setUp() {
         driver = DriverFactory.initDriver();
     }
 
-    @AfterMethod(alwaysRun = true)
+    @AfterClass(alwaysRun = true)
     public void tearDown() {
         DriverFactory.quitDriver();
-    }
-
-    /**
-     * Helper to navigate directly to the configured QA base URL.
-     */
-    protected void navigateToBaseUrl() {
-        if (driver != null) {
-            driver.get(ConfigReader.getBaseUrl());
-        }
     }
 
     protected WebDriver getDriver() {

@@ -7,31 +7,31 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 /**
- * UI smoke test verifying Selenium WebDriver initialization,
- * navigation, and Page Object Model interaction.
+ * Framework self-test (env=demo): verifies Selenium WebDriver initialization,
+ * navigation, and Page Object Model interaction against a public sandbox.
  */
 public class SmokeUiTest extends BaseTest {
 
-    @Test(description = "Verify WebDriver initializes and successfully navigates to base QA URL")
+    @Test(description = "Verify WebDriver initializes and successfully navigates to the configured base URL")
     public void testBrowserLaunchAndNavigation() {
-        navigateToBaseUrl();
-        String currentUrl = driver.getCurrentUrl();
-        String title = driver.getTitle();
+        driver.get(ConfigReader.getBaseUrl());
 
-        Assert.assertNotNull(currentUrl, "Current URL should not be null");
-        Assert.assertTrue(currentUrl.contains("the-internet.herokuapp.com"), "URL should match target application");
-        Assert.assertNotNull(title, "Page title should not be null");
+        Assert.assertTrue(driver.getCurrentUrl().startsWith(ConfigReader.getBaseUrl()),
+                "Browser should be on the configured base URL but was " + driver.getCurrentUrl());
+        Assert.assertFalse(driver.getTitle().isEmpty(), "Page title should not be empty");
     }
 
-    @Test(description = "Verify LoginPage object can interact with form elements")
-    public void testLoginPageInteraction() {
+    @Test(description = "Verify the LoginPage object drives the form and reads the error for unknown credentials")
+    public void testLoginPageRejectsUnknownUser() {
         driver.get(ConfigReader.getBaseUrl() + "/login");
         LoginPage loginPage = new LoginPage(driver);
 
-        loginPage.enterUsername("tomsmith");
-        loginPage.enterPassword("SuperSecretPassword!");
+        loginPage.enterUsername("QA-AUTO-unknown-user");
+        loginPage.enterPassword("not-a-real-password");
         loginPage.clickLogin();
 
         Assert.assertTrue(loginPage.isFlashMessageDisplayed(), "Flash notification should appear on submit");
+        Assert.assertTrue(loginPage.getFlashMessageText().toLowerCase().contains("invalid"),
+                "Flash message should report invalid credentials: " + loginPage.getFlashMessageText());
     }
 }

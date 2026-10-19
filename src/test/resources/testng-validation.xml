@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!-- Part C on its own: needs employer.admin.email / employer.admin.password (an activated QA-AUTO admin). -->
 <suite name="Part C - Add Employee Data-Driven Validation Suite" verbose="1">
 
     <listeners>

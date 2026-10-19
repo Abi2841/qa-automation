@@ -1,64 +1,85 @@
 {
-  "invalidEmails": [
+  "_comment": "Part C scenarios for the single data-driven Add employee test. Each scenario starts from a fresh VALID employee and applies only its 'overrides', so exactly one rule is broken. Tokens: {{seed.email}} / {{seed.ppsn}} = the employee created once before the scenarios run (duplicates); {{dob.age:N}} = a date of birth N years ago; {{dob.days.until.18:N}} = a person who turns 18 in N days. An empty string leaves the field blank. 'expectedMessageContains' is optional and case-insensitive.",
+  "scenarios": [
     {
-      "value": "invalid-email-missing-at-domain",
-      "scenario": "Missing @ and domain"
+      "id": "C01",
+      "description": "All mandatory fields left empty",
+      "overrides": { "firstName": "", "lastName": "", "email": "", "mobileNumber": "", "dateOfBirth": "", "ppsn": "", "startDate": "" }
     },
     {
-      "value": "qa.user@",
-      "scenario": "Missing domain after @"
+      "id": "C02",
+      "description": "Email left empty",
+      "overrides": { "email": "" }
     },
     {
-      "value": "@example.com",
-      "scenario": "Missing username before @"
+      "id": "C03",
+      "description": "PPSN left empty",
+      "overrides": { "ppsn": "" }
     },
     {
-      "value": "qa..user@example.com",
-      "scenario": "Double dot in local part"
-    }
-  ],
-  "invalidPpsns": [
-    {
-      "value": "12345",
-      "scenario": "Too short (less than 7 digits)"
+      "id": "C04",
+      "description": "Invalid email - missing @ and domain",
+      "overrides": { "email": "qa-auto-invalid-email" }
     },
     {
-      "value": "123456789",
-      "scenario": "Missing trailing check character (digits only)"
+      "id": "C05",
+      "description": "Invalid email - missing domain after @",
+      "overrides": { "email": "qa-auto-user@" }
     },
     {
-      "value": "ABC1234T",
-      "scenario": "Alphabetic characters in numeric prefix"
+      "id": "C06",
+      "description": "Invalid email - missing local part",
+      "overrides": { "email": "@example.com" }
     },
     {
-      "value": "1234567-T",
-      "scenario": "Disallowed special characters/hyphens"
-    }
-  ],
-  "invalidMobiles": [
-    {
-      "value": "12345",
-      "scenario": "Too short for Irish mobile"
+      "id": "C07",
+      "description": "Invalid PPSN - only 6 digits",
+      "overrides": { "ppsn": "123456T" }
     },
     {
-      "value": "+35387ABCDEF",
-      "scenario": "Alphabetic characters in mobile number"
+      "id": "C08",
+      "description": "Invalid PPSN - digits only, no letter",
+      "overrides": { "ppsn": "1234567" }
     },
     {
-      "value": "9999999999",
-      "scenario": "Invalid Irish network prefix (expected 08x or +3538x)"
-    }
-  ],
-  "under18Dobs": [
-    {
-      "value": "2012-05-15",
-      "age": 14,
-      "scenario": "14-year-old minor"
+      "id": "C09",
+      "description": "Invalid PPSN - three letters",
+      "overrides": { "ppsn": "1234567TAB" }
     },
     {
-      "value": "2009-10-01",
-      "age": 17,
-      "scenario": "17-year-old minor below 18-year statutory minimum"
+      "id": "C10",
+      "description": "Invalid PPSN - letters before digits",
+      "overrides": { "ppsn": "T1234567" }
+    },
+    {
+      "id": "C11",
+      "description": "Invalid mobile - too short",
+      "overrides": { "mobileNumber": "08712" }
+    },
+    {
+      "id": "C12",
+      "description": "Invalid mobile - contains letters",
+      "overrides": { "mobileNumber": "+35387ABCDEFG" }
+    },
+    {
+      "id": "C13",
+      "description": "Duplicate employee - same PPSN as an existing employee",
+      "overrides": { "ppsn": "{{seed.ppsn}}" }
+    },
+    {
+      "id": "C14",
+      "description": "Duplicate employee - same email as an existing employee",
+      "overrides": { "email": "{{seed.email}}" }
+    },
+    {
+      "id": "C15",
+      "description": "Under 18 - employee aged 16",
+      "overrides": { "dateOfBirth": "{{dob.age:16}}" }
+    },
+    {
+      "id": "C16",
+      "description": "Under 18 boundary - turns 18 tomorrow",
+      "overrides": { "dateOfBirth": "{{dob.days.until.18:1}}" }
     }
   ]
 }

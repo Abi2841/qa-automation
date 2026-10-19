@@ -1,73 +1,72 @@
 name: QA Automation Pipeline
 
+# Push / PR: compile and run the framework self-test (demo env, needs no secrets).
+# Manual run: the full QA suite; requires repository secrets with the QA URLs and credentials.
 on:
   push:
     branches: [ master, main ]
   pull_request:
     branches: [ master, main ]
-  schedule:
-    - cron: '0 2 * * *' # Nightly at 2:00 AM UTC
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'Target Execution Environment'
-        required: true
-        default: 'QA'
-        type: choice
-        options:
-          - QA
-          - STAGING
-          - DEV
       browser:
-        description: 'Target Browser for UI tests'
+        description: 'Browser for UI tests'
         required: true
         default: 'chrome'
         type: choice
-        options:
-          - chrome
-          - edge
-          - firefox
-      headless:
-        description: 'Run browser in headless mode'
-        required: true
-        default: true
-        type: boolean
+        options: [ chrome, edge, firefox ]
 
 jobs:
-  build-and-test:
+  framework-smoke:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - name: Stage 1 - Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Java JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: maven
-
-      - name: Stage 2 - Install
-        run: mvn clean compile test-compile -DskipTests=true
-
-      - name: Stage 3 - API tests
-        env:
-          API_AUTH_TOKEN: ${{ secrets.QA_API_TOKEN || 'qa-mock-bearer-token-uplift-2026' }}
-        run: |
-          mvn test -DsuiteXmlFile=src/test/resources/testng-api.xml -Dapi.auth.token="$API_AUTH_TOKEN"
-
-      - name: Stage 4 - UI tests
-        env:
-          ADMIN_USERNAME: ${{ secrets.QA_ADMIN_USERNAME || 'admin@uplift.com' }}
-          ADMIN_PASSWORD: ${{ secrets.QA_ADMIN_PASSWORD || 'AdminPassword123!' }}
-        run: |
-          mvn test -DsuiteXmlFile=src/test/resources/testng-smoke.xml -Dbrowser=${{ inputs.browser || 'chrome' }} -Dheadless=${{ inputs.headless || true }} -Dadmin.username="$ADMIN_USERNAME" -Dadmin.password="$ADMIN_PASSWORD"
-
-      - name: Stage 5 - Publish report & Archive Artifacts
+      - name: Compile
+        run: mvn -B clean test-compile
+      - name: Framework self-test (demo environment)
+        run: mvn -B test -Denv=demo -DsuiteXmlFile=src/test/resources/testng-smoke.xml
+      - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Extent-and-Surefire-Reports
+          name: smoke-reports
+          path: |
+            reports/
+            target/surefire-reports/
+
+  qa-full-run:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      ADMIN_PORTAL_URL: ${{ secrets.QA_ADMIN_PORTAL_URL }}
+      EMPLOYER_PORTAL_URL: ${{ secrets.QA_EMPLOYER_PORTAL_URL }}
+      API_BASE_URL: ${{ secrets.QA_API_BASE_URL }}
+      ADMIN_USERNAME: ${{ secrets.QA_ADMIN_USERNAME }}
+      ADMIN_PASSWORD: ${{ secrets.QA_ADMIN_PASSWORD }}
+      API_AUTH_USERNAME: ${{ secrets.QA_API_USERNAME }}
+      API_AUTH_PASSWORD: ${{ secrets.QA_API_PASSWORD }}
+      INBOX_USERNAME: ${{ secrets.QA_INBOX_USERNAME }}
+      INBOX_PASSWORD: ${{ secrets.QA_INBOX_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+      - name: Full suite against QA
+        run: mvn -B clean test -Denv=qa -Dbrowser=${{ inputs.browser }} -Dheadless=true
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-reports
           path: |
             reports/
             target/surefire-reports/

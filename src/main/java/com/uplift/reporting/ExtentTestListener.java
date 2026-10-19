@@ -2,6 +2,7 @@ package com.uplift.reporting;
 
 import com.aventstack.extentreports.ExtentReports;
 import com.aventstack.extentreports.ExtentTest;
+import com.aventstack.extentreports.MediaEntityBuilder;
 import com.aventstack.extentreports.Status;
 import com.uplift.base.DriverFactory;
 import com.uplift.config.ConfigReader;
@@ -13,7 +14,8 @@ import org.testng.ITestResult;
 
 /**
  * TestNG listener to automatically log test lifecycle events into ExtentReports
- * and attach failure screenshots.
+ * and attach failure screenshots (embedded in the report and saved to reports/screenshots
+ * so CI can archive them as build artifacts).
  */
 public class ExtentTestListener implements ITestListener {
 
@@ -31,11 +33,12 @@ public class ExtentTestListener implements ITestListener {
 
     @Override
     public void onTestStart(ITestResult result) {
-        String testName = result.getMethod().getMethodName();
+        String testName = buildTestName(result);
         String description = result.getMethod().getDescription();
         ExtentTest test = extent.createTest(testName, description != null ? description : "");
-        
-        // Tag test with package or groups
+
+        // Tag test with its class and groups
+        test.assignCategory(result.getTestClass().getRealClass().getSimpleName());
         for (String group : result.getMethod().getGroups()) {
             test.assignCategory(group);
         }
@@ -43,11 +46,26 @@ public class ExtentTestListener implements ITestListener {
         ExtentManager.setTest(test);
     }
 
+    /**
+     * Data-driven iterations get their first two parameters (scenario id and description) in the name,
+     * so each row of the data file is identifiable in the report.
+     */
+    private static String buildTestName(ITestResult result) {
+        String name = result.getMethod().getMethodName();
+        Object[] params = result.getParameters();
+        if (params != null && params.length >= 2) {
+            name += " [" + params[0] + " - " + params[1] + "]";
+        } else if (params != null && params.length == 1) {
+            name += " [" + params[0] + "]";
+        }
+        return name;
+    }
+
     @Override
     public void onTestSuccess(ITestResult result) {
         ExtentTest test = ExtentManager.getTest();
         if (test != null) {
-            test.log(Status.PASS, "Test passed successfully: " + result.getMethod().getMethodName());
+            test.log(Status.PASS, "Test passed: " + result.getMethod().getMethodName());
         }
         ExtentManager.unloadTest();
     }
@@ -65,9 +83,12 @@ public class ExtentTestListener implements ITestListener {
             if (ConfigReader.isScreenshotOnFailure()) {
                 WebDriver driver = DriverFactory.getDriver();
                 if (driver != null) {
+                    String file = ScreenshotUtils.captureFile(driver, buildTestName(result));
                     String base64 = ScreenshotUtils.captureBase64(driver);
                     if (base64 != null) {
-                        test.addScreenCaptureFromBase64String(base64, "Failure Screenshot");
+                        test.fail("Failure screenshot" + (file != null ? " (saved as reports/" + file + ")" : "")
+                                + " - URL: " + driver.getCurrentUrl(),
+                                MediaEntityBuilder.createScreenCaptureFromBase64String(base64).build());
                     }
                 }
             }
@@ -78,11 +99,13 @@ public class ExtentTestListener implements ITestListener {
     @Override
     public void onTestSkipped(ITestResult result) {
         ExtentTest test = ExtentManager.getTest();
-        if (test != null) {
-            test.log(Status.SKIP, "Test skipped: " + result.getMethod().getMethodName());
-            if (result.getThrowable() != null) {
-                test.log(Status.SKIP, result.getThrowable());
-            }
+        if (test == null) {
+            // Skipped because a dependency or configuration method failed: onTestStart was never called
+            test = extent.createTest(buildTestName(result));
+        }
+        test.log(Status.SKIP, "Test skipped: " + result.getMethod().getMethodName());
+        if (result.getThrowable() != null) {
+            test.log(Status.SKIP, result.getThrowable());
         }
         ExtentManager.unloadTest();
     }

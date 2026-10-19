@@ -9,8 +9,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Service Object encapsulating HTTP interactions with Employee and Auth endpoints.
- * Analogous to Page Object Model, but for REST API resources.
+ * Service Object encapsulating HTTP interactions with the Auth and Employee endpoints.
+ * Analogous to Page Object Model, but for REST API resources: tests never build requests themselves.
+ *
+ * Endpoint paths and payload field names come from configuration (environments/qa.properties),
+ * so they can be aligned with the provided Swagger without code changes.
  */
 public final class EmployeeApiService {
 
@@ -18,49 +21,45 @@ public final class EmployeeApiService {
         // Prevent direct instantiation
     }
 
-    private static String getAuthEndpoint() {
-        return ConfigReader.getProperty("api.auth.endpoint", "/login");
-    }
-
     private static String getEmployeesEndpoint() {
-        return ConfigReader.getProperty("api.employees.endpoint", "/users");
+        return ConfigReader.getRequired("api.employees.endpoint");
     }
 
     /**
-     * Requirement 1: Obtains authentication token using documented credentials.
+     * Requests an authentication token with the documented credentials.
      */
-    public static Response postAuthLogin(String username, String password) {
+    public static Response authenticate(String username, String password) {
         Map<String, String> payload = new HashMap<>();
-        payload.put("username", username);
-        payload.put("email", username);
-        payload.put("password", password);
+        payload.put(ConfigReader.getProperty("api.auth.username.field", "email"), username);
+        payload.put(ConfigReader.getProperty("api.auth.password.field", "password"), password);
 
         return RestAssured.given()
                 .spec(ApiSpecFactory.getDefaultRequestSpec())
                 .body(payload)
                 .when()
-                .post(getAuthEndpoint())
+                .post(ConfigReader.getRequired("api.auth.endpoint"))
                 .then()
                 .extract()
                 .response();
     }
 
     /**
-     * Requirement 2: Sends employee creation request without an Authorization token.
+     * Reusable helper: returns a token or fails with the status and body of the auth response.
      */
-    public static Response createEmployeeWithoutToken(EmployeeModel employee) {
-        return RestAssured.given()
-                .spec(ApiSpecFactory.getDefaultRequestSpec())
-                .body(employee)
-                .when()
-                .post(getEmployeesEndpoint())
-                .then()
-                .extract()
-                .response();
+    public static String getToken(String username, String password) {
+        Response response = authenticate(username, password);
+        String token = response.getStatusCode() == 200 || response.getStatusCode() == 201
+                ? response.jsonPath().getString(ConfigReader.getProperty("api.auth.token.path", "token"))
+                : null;
+        if (token == null || token.trim().isEmpty()) {
+            throw new IllegalStateException("Could not obtain an API token: HTTP " + response.getStatusCode()
+                    + " " + response.getBody().asString());
+        }
+        return token;
     }
 
     /**
-     * Requirement 3: Creates an employee using POST with an authenticated Bearer token.
+     * Creates an employee with POST. Pass a null token to send the request unauthenticated.
      */
     public static Response createEmployee(EmployeeModel employee, String token) {
         return RestAssured.given()
@@ -74,30 +73,23 @@ public final class EmployeeApiService {
     }
 
     /**
-     * Requirement 4: Retrieves an employee by ID using GET.
+     * Retrieves an employee by ID using GET.
      */
     public static Response getEmployeeById(String employeeId, String token) {
         return RestAssured.given()
                 .spec(ApiSpecFactory.getAuthenticatedRequestSpec(token))
+                .pathParam("id", employeeId)
                 .when()
-                .get(getEmployeesEndpoint() + "/" + employeeId)
+                .get(getEmployeesEndpoint() + "/{id}")
                 .then()
                 .extract()
                 .response();
     }
 
     /**
-     * Requirement 5: Submits an employee record with an invalid PPSN.
+     * Extracts the created employee's id using api.employee.id.path.
      */
-    public static Response createEmployeeWithInvalidPpsn(EmployeeModel validBase, String invalidPpsn, String token) {
-        validBase.setPpsn(invalidPpsn);
-        return RestAssured.given()
-                .spec(ApiSpecFactory.getAuthenticatedRequestSpec(token))
-                .body(validBase)
-                .when()
-                .post(getEmployeesEndpoint())
-                .then()
-                .extract()
-                .response();
+    public static String extractEmployeeId(Response response) {
+        return response.jsonPath().getString(ConfigReader.getProperty("api.employee.id.path", "id"));
     }
 }

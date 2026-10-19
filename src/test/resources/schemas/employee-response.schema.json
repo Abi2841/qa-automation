@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Employee (create / get response)",
+  "description": "Expected employee response. Field names mirror the request model; align with the provided Swagger definition.",
+  "type": "object",
+  "required": ["id", "firstName", "lastName", "email", "ppsn"],
+  "properties": {
+    "id": { "type": ["string", "integer"] },
+    "firstName": { "type": "string", "minLength": 1 },
+    "lastName": { "type": "string", "minLength": 1 },
+    "email": { "type": "string", "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$" },
+    "mobileNumber": { "type": ["string", "null"] },
+    "dateOfBirth": { "type": ["string", "null"] },
+    "ppsn": { "type": "string", "pattern": "^[0-9]{7}[A-Z]{1,2}$" },
+    "startDate": { "type": ["string", "null"] }
+  }
+}

@@ -1,85 +1,62 @@
 package com.uplift.models;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Random;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.uplift.data.TestDataGenerator;
+
+import java.time.LocalDate;
 
 /**
  * Data model representing an individual Employee.
- * Generates unique test data with the required 'QA-AUTO-' prefix.
- * Supports Irish payroll & regulatory fields: PPSN, Mobile, Date of Birth.
+ * Fields follow the "Add employee" form: name, email, mobile, date of birth, PPSN and start date.
+ * Also serialized as the REST request body (null fields are omitted); dates are ISO yyyy-MM-dd.
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class EmployeeModel {
 
-    private String employeeId;
     private String firstName;
     private String lastName;
     private String email;
-    private String department;
-    private String dateOfJoining;
-    private String salary;
-    private String ppsn;          // Irish Personal Public Service Number (e.g. 1234567T)
-    private String mobileNumber;  // e.g. +353871234567
-    private String dateOfBirth;   // e.g. 1995-06-15 (Must be >= 18 years old)
+    private String mobileNumber;
+    private String dateOfBirth;   // must make the employee at least 18
+    private String ppsn;          // 7 digits + 1-2 letters, e.g. 1234567T
+    private String startDate;
+    private String employerId;    // only sent to the API when api.employer.id is configured
 
     public EmployeeModel() {
     }
 
-    public EmployeeModel(String employeeId, String firstName, String lastName, String email,
-                         String department, String dateOfJoining, String salary) {
-        this(employeeId, firstName, lastName, email, department, dateOfJoining, salary,
-             "1234567T", "+353871234567", "1995-06-15");
-    }
-
-    public EmployeeModel(String employeeId, String firstName, String lastName, String email,
-                         String department, String dateOfJoining, String salary,
-                         String ppsn, String mobileNumber, String dateOfBirth) {
-        this.employeeId = employeeId;
-        this.firstName = firstName;
-        this.lastName = lastName;
-        this.email = email;
-        this.department = department;
-        this.dateOfJoining = dateOfJoining;
-        this.salary = salary;
-        this.ppsn = ppsn;
-        this.mobileNumber = mobileNumber;
-        this.dateOfBirth = dateOfBirth;
+    /**
+     * Copy constructor so a scenario can change one field without touching the original.
+     */
+    public EmployeeModel(EmployeeModel other) {
+        this.firstName = other.firstName;
+        this.lastName = other.lastName;
+        this.email = other.email;
+        this.mobileNumber = other.mobileNumber;
+        this.dateOfBirth = other.dateOfBirth;
+        this.ppsn = other.ppsn;
+        this.startDate = other.startDate;
+        this.employerId = other.employerId;
     }
 
     /**
-     * Generates a valid Employee record with unique values and QA-AUTO- prefix.
-     * Complies with Irish regulatory standards (valid PPSN, Irish mobile, age > 18).
+     * Generates a valid Employee record with unique values and QA-AUTO- prefix:
+     * checksum-valid PPSN, Irish mobile, 30-year-old date of birth, start date today.
      */
     public static EmployeeModel generateRandomEmployee() {
-        String timestamp = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-        int randomDigits = 1000 + new Random().nextInt(9000);
-        int ppsnDigits = 1000000 + new Random().nextInt(8999999);
-        char[] ppsnLetters = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'R', 'S', 'T', 'V', 'W', 'X', 'Y'};
-        char ppsnCheck = ppsnLetters[new Random().nextInt(ppsnLetters.length)];
-
         EmployeeModel employee = new EmployeeModel();
-        employee.setEmployeeId("QA-AUTO-EMP-" + timestamp.substring(8) + randomDigits);
-        employee.setFirstName("QA-AUTO-John");
-        employee.setLastName("Doe" + randomDigits);
-        employee.setEmail("qa-auto-emp-" + timestamp + randomDigits + "@testworkplace.com");
-        employee.setDepartment("Engineering");
-        employee.setDateOfJoining("2026-01-15");
-        employee.setSalary("65000");
-        employee.setPpsn(ppsnDigits + String.valueOf(ppsnCheck));
-        employee.setMobileNumber("+35387" + (1000000 + new Random().nextInt(8999999)));
-        employee.setDateOfBirth("1995-08-20"); // Valid: ~31 years old
+        employee.setFirstName(TestDataGenerator.prefixed("Employee"));
+        employee.setLastName("Member" + TestDataGenerator.uniqueLetters());
+        employee.setEmail(TestDataGenerator.email("employee"));
+        employee.setMobileNumber(TestDataGenerator.irishMobile());
+        employee.setDateOfBirth(LocalDate.now().minusYears(30).toString());
+        employee.setPpsn(TestDataGenerator.validPpsn());
+        employee.setStartDate(LocalDate.now().toString());
         return employee;
     }
 
     // Getters and Setters
-    public String getEmployeeId() {
-        return employeeId;
-    }
-
-    public void setEmployeeId(String employeeId) {
-        this.employeeId = employeeId;
-    }
-
     public String getFirstName() {
         return firstName;
     }
@@ -104,38 +81,6 @@ public class EmployeeModel {
         this.email = email;
     }
 
-    public String getDepartment() {
-        return department;
-    }
-
-    public void setDepartment(String department) {
-        this.department = department;
-    }
-
-    public String getDateOfJoining() {
-        return dateOfJoining;
-    }
-
-    public void setDateOfJoining(String dateOfJoining) {
-        this.dateOfJoining = dateOfJoining;
-    }
-
-    public String getSalary() {
-        return salary;
-    }
-
-    public void setSalary(String salary) {
-        this.salary = salary;
-    }
-
-    public String getPpsn() {
-        return ppsn;
-    }
-
-    public void setPpsn(String ppsn) {
-        this.ppsn = ppsn;
-    }
-
     public String getMobileNumber() {
         return mobileNumber;
     }
@@ -152,7 +97,38 @@ public class EmployeeModel {
         this.dateOfBirth = dateOfBirth;
     }
 
+    public String getPpsn() {
+        return ppsn;
+    }
+
+    public void setPpsn(String ppsn) {
+        this.ppsn = ppsn;
+    }
+
+    public String getStartDate() {
+        return startDate;
+    }
+
+    public void setStartDate(String startDate) {
+        this.startDate = startDate;
+    }
+
+    public String getEmployerId() {
+        return employerId;
+    }
+
+    public void setEmployerId(String employerId) {
+        this.employerId = employerId;
+    }
+
+    @JsonIgnore
     public String getFullName() {
         return firstName + " " + lastName;
+    }
+
+    @Override
+    public String toString() {
+        return getFullName() + " <" + email + ">, PPSN " + ppsn + ", mobile " + mobileNumber
+                + ", DOB " + dateOfBirth + ", start " + startDate;
     }
 }

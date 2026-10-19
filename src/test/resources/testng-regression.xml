@@ -1,35 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!-- Full run (default for "mvn clean test"): journey first, so the validation and API cross-check
+     reuse the employer admin activated in this run - no extra employer credentials needed. -->
 <suite name="QA Automation Framework - Full Regression Suite" verbose="1">
 
     <listeners>
         <listener class-name="com.uplift.reporting.ExtentTestListener"/>
     </listeners>
 
-    <test name="Part D - REST Assured API Suite">
-        <classes>
-            <class name="com.uplift.tests.api.EmployeeApiTest"/>
-            <class name="com.uplift.tests.api.SmokeApiTest"/>
-        </classes>
-    </test>
-
-    <test name="Framework and Base Smoke Tests">
+    <test name="Framework Checks">
         <classes>
             <class name="com.uplift.tests.FrameworkSmokeTest"/>
-            <class name="com.uplift.tests.ui.SmokeUiTest"/>
         </classes>
     </test>
 
-    <test name="Part C - Add Employee Data-Driven Negative Validations">
+    <test name="Part B - End-to-End Journey" preserve-order="true">
+        <classes>
+            <class name="com.uplift.tests.ui.AdminPortalJourneyTest"/>
+            <class name="com.uplift.tests.ui.EmployerPortalJourneyTest"/>
+        </classes>
+    </test>
+
+    <test name="Part C - Add Employee Data-Driven Validations">
         <classes>
             <class name="com.uplift.tests.ui.EmployeeValidationTest"/>
         </classes>
     </test>
 
-    <test name="Part B - End-to-End User Journeys">
+    <test name="Part D - REST Assured API Suite">
         <classes>
-            <class name="com.uplift.tests.ui.AdminPortalJourneyTest"/>
-            <class name="com.uplift.tests.ui.EmployerPortalJourneyTest"/>
+            <class name="com.uplift.tests.api.EmployeeApiTest"/>
         </classes>
     </test>
 

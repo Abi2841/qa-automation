@@ -9,14 +9,19 @@ import org.openqa.selenium.WebDriver;
  */
 public class EmployerLoginPage extends BasePage {
 
-    // Selectors
-    private final By emailInput = By.cssSelector("input#username, input#email, input[name='email'], input[type='email']");
-    private final By passwordInput = By.cssSelector("input#password, input[name='password'], input[type='password']");
-    private final By loginButton = By.cssSelector("button[type='submit'], button#login-btn, button.btn-primary");
-    private final By errorMessageBanner = By.cssSelector(".alert-danger, .error-message, [role='alert'], #flash");
+    private final By emailInput = By.cssSelector(
+            "input[type='email'], input[name='email'], input[name='username'], input#username, input#email");
+    private final By passwordInput = By.cssSelector("input[type='password']");
+    private final By loginButton = By.xpath("//button[@type='submit'] | //input[@type='submit']");
+    private final By errorMessageBanner = By.cssSelector("[role='alert'], .alert-danger, .error-message, [class*='error']");
 
     public EmployerLoginPage(WebDriver driver) {
         super(driver);
+    }
+
+    public EmployerLoginPage open(String url) {
+        driver.get(url);
+        return this;
     }
 
     public void enterEmail(String email) {
@@ -32,7 +37,7 @@ public class EmployerLoginPage extends BasePage {
     }
 
     /**
-     * Fluent action: logs into Employer Portal and returns EmployerDashboardPage.
+     * Reusable login helper: logs into the Employer Portal and returns the dashboard.
      */
     public EmployerDashboardPage loginAs(String email, String password) {
         enterEmail(email);
@@ -49,7 +54,10 @@ public class EmployerLoginPage extends BasePage {
         return getText(errorMessageBanner);
     }
 
+    /**
+     * True when the login form is shown (password field and submit button visible).
+     */
     public boolean isLoginPageDisplayed() {
-        return isDisplayed(loginButton);
+        return isDisplayed(passwordInput) && isDisplayed(loginButton, 1);
     }
 }

@@ -1,84 +1,59 @@
 package com.uplift.pages.employer;
 
-import com.uplift.pages.BasePage;
-import com.uplift.utils.WaitUtils;
+import com.uplift.config.ConfigReader;
+import com.uplift.pages.PortalPage;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
-
-import java.util.List;
 
 /**
  * Page Object representing the Employer Employee Directory.
- * Supports manual employee creation, bulk CSV upload, and employee search.
+ * Entry point for "Add employee" and "Bulk upload".
  */
-public class EmployeesPage extends BasePage {
+public class EmployeesPage extends PortalPage {
 
-    // Selectors
-    private final By addEmployeeButton = By.cssSelector("button#add-employee, a[href*='add-employee'], [data-testid='btn-add-employee'], .btn-add");
-    private final By bulkUploadButton = By.cssSelector("button#bulk-upload, a[href*='bulk'], [data-testid='btn-bulk-upload'], .btn-upload");
-    private final By downloadTemplateLink = By.cssSelector("a[href*='template'], [data-testid='btn-download-template'], .link-download");
-    private final By searchInput = By.cssSelector("input[type='search'], input[placeholder*='Search employees'], #employee-search");
-    private final By employeeTableRows = By.cssSelector("table#employees-table tbody tr, table.employee-directory tbody tr, table tbody tr");
-    private final By successToast = By.cssSelector(".toast-success, .alert-success, [role='status']");
+    private final By addEmployeeButton = actionWithText("add", "employee");
+    private final By bulkUploadButton = actionWithText("bulk");
+    private final By searchInput = By.cssSelector("input[type='search'], input[placeholder*='earch'], input[aria-label*='earch']");
 
     public EmployeesPage(WebDriver driver) {
         super(driver);
     }
 
-    /**
-     * Clicks the 'Add Employee' button to navigate to the manual creation form.
-     */
     public AddEmployeePage clickAddEmployee() {
         click(addEmployeeButton);
         return new AddEmployeePage(driver);
     }
 
-    /**
-     * Clicks the 'Bulk Upload' button to open the CSV upload view.
-     */
     public BulkUploadPage clickBulkUpload() {
         click(bulkUploadButton);
         return new BulkUploadPage(driver);
     }
 
-    /**
-     * Clicks the portal link to download the actual portal CSV template.
-     */
-    public void clickDownloadTemplate() {
-        click(downloadTemplateLink);
-    }
-
     public void searchEmployee(String searchTerm) {
-        if (isDisplayed(searchInput)) {
+        if (isDisplayed(searchInput, ConfigReader.getShortWait())) {
             sendKeys(searchInput, searchTerm);
         }
     }
 
     /**
-     * Verifies that an employee matching the identifier (e.g., email or name or ID) appears in the table.
+     * Verifies that an employee matching the identifier (e.g. email) appears in the list.
      */
     public boolean isEmployeeListed(String identifier) {
-        WaitUtils.waitForPresence(driver, employeeTableRows, 15);
-        List<WebElement> rows = driver.findElements(employeeTableRows);
-        for (WebElement row : rows) {
-            if (row.getText().contains(identifier)) {
-                return true;
-            }
-        }
-        return false;
+        return isEmployeeListed(identifier, ConfigReader.getExplicitWait());
     }
 
-    public int getEmployeeCount() {
-        List<WebElement> rows = driver.findElements(employeeTableRows);
-        return rows.size();
+    /**
+     * Use a short timeout when asserting that an employee is NOT listed.
+     */
+    public boolean isEmployeeListed(String identifier, int timeoutSeconds) {
+        searchEmployee(identifier);
+        return isDisplayed(rowContaining(identifier), timeoutSeconds);
     }
 
-    public boolean isSuccessToastDisplayed() {
-        return isDisplayed(successToast);
-    }
-
-    public String getSuccessToastText() {
-        return getText(successToast);
+    /**
+     * Returns the employer dashboard view (menu is shared by every portal page).
+     */
+    public EmployerDashboardPage dashboard() {
+        return new EmployerDashboardPage(driver);
     }
 }
