@@ -106,7 +106,7 @@ pipeline {
 // Runs Maven with the build parameters. Test failures do not stop the pipeline: the junit step
 // marks the build UNSTABLE instead, so the UI stage still runs and every report is published.
 def runMaven(String goals) {
-    String cmd = "mvn -B ${goals} -Denv=${params.ENVIRONMENT} -Dbrowser=${params.BROWSER} -Dheadless=${params.HEADLESS}" +
+    String cmd = "mvn -B -ntp ${goals} -Denv=${params.ENVIRONMENT} -Dbrowser=${params.BROWSER} -Dheadless=${params.HEADLESS}" +
                  ' -Dmaven.test.failure.ignore=true -Dmaven.test.redirectTestOutputToFile=true'
     if (isUnix()) {
         sh cmd
