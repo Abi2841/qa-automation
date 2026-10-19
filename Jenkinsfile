@@ -118,9 +118,14 @@ def runMaven(String goals) {
 // Bonus: failure notification by email (requires the Mailer plugin and an SMTP server in Jenkins)
 def notifyTeam(String status) {
     if (params.NOTIFY_EMAIL?.trim()) {
-        mail to: params.NOTIFY_EMAIL,
-             subject: "${status} - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-             body: "${status}\nEnvironment: ${params.ENVIRONMENT}, browser: ${params.BROWSER}\n" +
-                   "Report: ${env.BUILD_URL}Extent_20Test_20Report/\nConsole: ${env.BUILD_URL}console"
+        try {
+            mail to: params.NOTIFY_EMAIL,
+                 subject: "${status} - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                 body: "${status}\nEnvironment: ${params.ENVIRONMENT}, browser: ${params.BROWSER}\n" +
+                       "Report: ${env.BUILD_URL}Extent_20Test_20Report/\nConsole: ${env.BUILD_URL}console"
+        } catch (Exception e) {
+            // A missing SMTP server must never change the build result
+            echo "Email not sent (configure SMTP under Manage Jenkins > System > E-mail Notification): ${e.message}"
+        }
     }
 }
