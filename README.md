@@ -2,6 +2,8 @@
 
 Java 17 · Selenium WebDriver 4 · TestNG · REST Assured · ExtentReports 5 · Maven · Jenkins
 
+Done by Arun
+
 Automates the journey **Admin creates employer → Admin adds employer admin → Employer admin adds employees → Employees appear in the list and receive an invite**, across the Admin portal, the Employer portal and the API.
 
 ---
