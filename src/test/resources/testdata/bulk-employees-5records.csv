@@ -1,6 +1,0 @@
-Employee ID,First Name,Last Name,Email,Department,Date of Joining,Salary
-QA-AUTO-E001,QA-AUTO-Alice,Smith,qa-auto-alice@example.com,Finance,2025-02-01,70000
-QA-AUTO-E002,QA-AUTO-Bob,Jones,qa-auto-bob@example.com,Marketing,2025-03-15,55000
-QA-AUTO-E003,QA-AUTO-Charlie,Brown,qa-auto-charlie@example.com,Operations,2025-04-10,60000
-QA-AUTO-E004,QA-AUTO-Diana,Prince,invalid-email-format-missing-at,Sales,2025-05-01,58000
-QA-AUTO-E001,QA-AUTO-Edward,Taylor,qa-auto-edward@example.com,HR,2025-06-01,-1000
